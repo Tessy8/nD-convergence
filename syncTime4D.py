@@ -160,55 +160,67 @@ def rhs_all(t, Y, pars):
 def create_continuous_trajectories():
     """Integrate rhs_all for 4 agents; returns agent trajectories"""
     initials = [
-        np.array([0.0, 0.2, 0.15, 0.1]),
-        np.array([0.2, 0.15, 0.1, 0.0]),
-        np.array([0.15, 0.1, 0.0, 0.2]),
-        np.array([0.05, 0.1, 0.1, 0.2]),
+        np.array([0.00, 0.25, 0.10, 0.05]),
+        np.array([0.18, 0.05, 0.30, 0.08]),
+        np.array([0.27, 0.12, 0.02, 0.32]),
+        np.array([0.06, 0.20, 0.18, 0.12]),
     ]
     n = len(initials)
     Y0 = np.concatenate(initials)
 
     ode = OdePC(rhs_all)
     pars = dict(n_agents=n, speed=0.5, K_phase=0.3, gamma=0.12, k_couple=0.05)
-    t, Y, _ = ode(Y0, t0=0.0, t1=20.0, dt=0.001, tTol=1e-6, pars=pars, withDy=True)
+    t, Y, _ = ode(Y0, t0=0.0, t1=40.0, dt=0.001, tTol=1e-6, pars=pars, withDy=True)
 
     trajs = [Y[:, 4*i:4*(i+1)] for i in range(n)]
     times = [t for _ in range(n)]
     return trajs, times
 
-def make_projection(n=4, seed=None, min_norm=0.90, max_norm=0.98, cmin=0.90, max_its=6):
-    """Random 2 x n with columns in first quadrant and aligned with (1,1)"""
-    rng = np.random.default_rng(seed)
-    P = rng.random((2, n)) + 0.15
-    P /= np.linalg.norm(P, axis=0, keepdims=True)
+def build_biased_P(D, ix, iy, small=0.03, big=1.0, col_norm=0.9):
+    """
+    2×D projection with x-axis ~ dim ix and y-axis ~ dim iy.
+    Two large entries (≈1) at columns ix (row 0) and iy (row 1),
+    all other entries small (~0.2/D). Columns are normalized to col_norm.
+    """
+    if small is None:
+        small = 0.2 / D
 
-    u = np.array([1.0, 1.0]) / np.sqrt(2.0)
-    for k in range(n):
-        p, its = P[:, k], 0
-        while p.dot(u) < cmin and its < max_its:
-            lam = 0.35 + 0.25 * rng.random()
-            p = (1.0 - lam) * p + lam * u
-            p /= np.linalg.norm(p)
-            its += 1
-        P[:, k] = p
+    P = np.full((2, D), small, dtype=float)
+    P[0, ix] = big   # x-axis strongly aligned with dim ix
+    P[1, iy] = big   # y-axis strongly aligned with dim iy
 
-    scales = rng.uniform(min_norm, max_norm, size=(1, n))
-    return P * scales
+    # keep columns' norms consistent (and positive)
+    norms = np.linalg.norm(P, axis=0, keepdims=True)
+    norms = np.maximum(norms, 1e-12)
+    P = P / norms * col_norm
+    return P
 
-def make_projection_set(num=6, n=4, base_seed=17):
-    """Create projection matrices for 6 subplots"""
-    return [make_projection(n=n, seed=base_seed + s) for s in range(num)]
+def make_projection_set(num=6, n=4, base_seed=None):
+    """
+    Biased projections: each view highlights a different pair of dims.
+    For 4D, this cycles through (w,x), (y,z), (w,y), (x,z), (w,z), (x,y).
+    """
+    # choose pairs to emphasize (wrap/cycle if num > len(pairs))
+    pairs = [(0,1),(2,3),(0,2),(1,3),(0,3),(1,2)]
+    Ps = []
+    for v in range(num):
+        ix, iy = pairs[v % len(pairs)]
+        Ps.append(build_biased_P(n, ix, iy, small=0.2/n, big=1.0, col_norm=0.9))
+    return Ps
 
 def draw_axes_for_P(ax, P, length=0.25):
-    """Draw projected w/x/y/z axes as colored arrows from the origin"""
+    """Draw projected w/x/y/z axes; keep relative magnitudes (big long, small short)."""
+    # global scale so the largest column length maps to `length`
+    col_norms = np.linalg.norm(P, axis=0)
+    max_col = max(col_norms.max(), 1e-12)
+    scale = length / max_col
+
     for k, lab in enumerate(AXIS_LABELS):
-        vec = P[:, k]
-        if np.linalg.norm(vec) > 1e-9:
-            vec = (vec / np.linalg.norm(vec)) * length
+        vec = P[:, k] * scale                    # preserve relative sizes
         ax.arrow(0, 0, vec[0], vec[1],
                  head_width=0.02, head_length=0.03,
                  fc=AXIS_COLORS[lab], ec=AXIS_COLORS[lab],
-                 linewidth=1.5, alpha=0.9, length_includes_head=True)
+                 linewidth=1.5, alpha=0.95, length_includes_head=True)
         ax.text(vec[0]*1.1, vec[1]*1.1, lab,
                 color=AXIS_COLORS[lab], fontsize=10, fontweight="bold")
 
@@ -303,14 +315,6 @@ def animate_continuous_agents():
                         for d in range(4)]
         interpolated_trajs.append(np.column_stack([f(uniform_times) for f in interp_funcs]))
 
-    # wrapped_trajs = [np.mod(T, 1.0) for T in interpolated_trajs]
-
-    # projected_trajs = [[np.mod((P @ T_wr.T).T, 1.0).astype(np.float32)
-    #                 for T_wr in wrapped_trajs]
-    #                for P in PROJECTIONS_2x4]
-
-    # cumlen4d = [cumlen_torus_nd(T_wr) for T_wr in wrapped_trajs]
-
     unwrapped_trajs = []
     for T in interpolated_trajs:
         theta = 2*np.pi*np.mod(T, 1.0) 
@@ -342,11 +346,14 @@ def animate_continuous_agents():
     fig, axs = plt.subplots(rows, cols, figsize=(18, 12))
     fig.tight_layout()
 
+    pairs = [(0,1),(2,3),(0,2),(1,3),(0,3),(1,2)]
     for idx, (ax, P) in enumerate(zip(axs.flat, PROJECTIONS_2x4), start=1):
         ax.set_aspect('equal'); ax.grid(True, alpha=0.3)
         ax.set_xlim(0, 1);      ax.set_ylim(0, 1)
         draw_axes_for_P(ax, P, length=0.2)
-        ax.set_title(f"Projection {idx}")
+        i, j = pairs[(idx-1) % len(pairs)]
+        ax.set_title(f"Projection {idx}: {AXIS_LABELS[i]}–{AXIS_LABELS[j]}")
+
 
     lines_4d = build_intersection_lines_4d(boundaries=(lower_boundary, upper_boundary), n_points=8)
 
