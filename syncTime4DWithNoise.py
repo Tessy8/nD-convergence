@@ -158,6 +158,33 @@ def rhs_all(t, Y, pars):
         dY[4*i:4*(i+1)] += k_couple * phase_err
     return dY
 
+def build_p_from_segment(T, Y, n_agents, t_start, t_end, torus=True):
+    """Make a DxN matrix p from a time window [t_start,t_end]."""
+    i0 = np.searchsorted(T, t_start, side='left')
+    i1 = np.searchsorted(T, t_end,   side='right')
+    seg = Y[i0:i1]                               # (S, 4*n_agents)
+    S = seg.shape[0]
+    X = seg.reshape(S, n_agents, 4)              # (S, A, D=4)
+    if torus:
+        X = np.mod(X, 1.0)                       # keep on [0,1)
+
+    # p has shape (D, N) with columns = 4D points
+    p = X.transpose(2, 0, 1).reshape(4, -1)      # (4, S*A)
+    return p
+
+def distance_from_diagonal(p):
+    """Professor’s metric: std across coordinates (one value per column)."""
+    return p.std(axis=0)
+
+def gaussian_reference(D, M):
+    """Reference from i.i.d. N(0,1): same metric as data."""
+    return np.random.randn(D, M).std(axis=0)
+
+def plot_cdf(x, label):
+    xs = np.sort(x)
+    qs = np.linspace(0, 1, xs.size, endpoint=True)
+    plt.plot(qs, xs, label=label, linewidth=2)
+
 def create_continuous_trajectories(noise_strength=0.0):
     """Integrate rhs_all for 4 agents using SDE; noise_strength=0 reproduces ODE"""
     initials = [
@@ -179,13 +206,13 @@ def create_continuous_trajectories(noise_strength=0.0):
     sde = SDE(d, s, sdim=len(Y0))
 
     # integrate
-    t = np.arange(0.0, 50, 0.01, dtype=np.float64)
+    t = np.arange(0.0, 500, 0.01, dtype=np.float64)
     T, Y, W = sde.integrateAt(t, Y0, dtype=np.float64)
     print("T_end =", T[-1], "  Var(W[:,0]) =", np.var(W[:,0]))
 
     trajs = [Y[:, 4*i:4*(i+1)] for i in range(n)]
     times = [T for _ in range(n)]
-    return trajs, times
+    return trajs, times, T, Y, n
 
 def build_biased_P(D, ix, iy, small=0.03, big=1.0, col_norm=0.9):
     """
@@ -310,8 +337,31 @@ def build_intersection_lines_4d(boundaries=(0.3, 0.7), n_points=60):
 def animate_continuous_agents():
     """Run simulation projected to 6 views, and animate"""
     PROJECTIONS_2x4 = make_projection_set(num=6, n=4, base_seed=17)
-    trajs, times = create_continuous_trajectories(0.005)
-    n_agents = len(trajs)
+    trajs, times, T, Y, n_agents = create_continuous_trajectories(0)
+
+    # Gaussian check (early and late)
+    Tend = T[-1]
+    p_early = build_p_from_segment(T, Y, n_agents, t_start=T[0],      t_end=Tend*0.1)
+    p_late  = build_p_from_segment(T, Y, n_agents, t_start=Tend*0.95, t_end=Tend)
+
+    data_early = distance_from_diagonal(p_early)
+    data_late  = distance_from_diagonal(p_late)
+
+    ref_early = gaussian_reference(4, M=10*data_early.size)
+    ref_late  = gaussian_reference(4, M=10*data_late.size)
+
+    plt.figure(figsize=(10,4))
+    plt.subplot(1,2,1)
+    plot_cdf(data_early, "sim early")
+    plot_cdf(ref_early,  "gauss ref (early)")
+    plt.title("CDF - early"); plt.grid(alpha=0.3); plt.legend()
+
+    plt.subplot(1,2,2)
+    plot_cdf(data_late,  "sim late")
+    plot_cdf(ref_late,   "gauss ref (late)")
+    plt.title("CDF - late"); plt.grid(alpha=0.3); plt.legend()
+    plt.tight_layout()
+    plt.savefig("cdf_compare_early_late.png", dpi=160)
 
     total_time = max(times[i][-1] for i in range(n_agents))
     fps = 30
@@ -417,7 +467,7 @@ def animate_continuous_agents():
 
     anim = FuncAnimation(fig, update, frames=len(uniform_times),
                          init_func=init, interval=1000/fps, blit=True, repeat=True)
-    anim.save("agents_animation_4D_with_ltl_noise.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
+    anim.save("agents_animation_4D_with_ltl_noise_and gaussian_plot.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
     return anim
 
 

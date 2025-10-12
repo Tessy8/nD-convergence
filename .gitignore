@@ -1,6 +1,7 @@
 *.pdf
 *.txt
 *.mp4
+*.png
 
 # Files
 esync_fixed.py
