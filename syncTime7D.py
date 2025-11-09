@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from scipy.interpolate import interp1d
+from integro_sde.sde import SDE
+
 
 lower_boundary = 0.3
 upper_boundary = 0.7
@@ -163,23 +165,37 @@ def rhs_all(t, Y, pars):
         dY[DIM*i:DIM*(i+1)] += k_couple * phase_err
     return dY
 
-def create_continuous_trajectories():
-    """Integrate rhs_all for 4 agents; returns agent trajectories"""
+def create_continuous_trajectories(noise_strength=0.0):
+    """Integrate rhs_all for 4 agents in 7D using SDE; noise_strength=0 reproduces ODE."""
     initials = [
         np.array([0.00, 0.25, 0.10, 0.05, 0.05, 0.28, 0.19]),
         np.array([0.18, 0.05, 0.30, 0.08, 0.16, 0.15, 0.22]),
         np.array([0.27, 0.12, 0.02, 0.32, 0.01, 0.07, 0.08]),
         np.array([0.06, 0.20, 0.18, 0.12, 0.28, 0.12, 0.10]),
     ]
-    n = len(initials)
-    Y0 = np.concatenate(initials)
+    n_agents = len(initials)
+    Y0 = np.concatenate(initials).astype(np.float64, copy=False)
 
-    ode = OdePC(rhs_all)
-    pars = dict(n_agents=n, speed=0.5, K_phase=0.3, gamma=0, k_couple=0.05)
-    t, Y, _ = ode(Y0, t0=0.0, t1=40.0, dt=0.01, tTol=1e-3, pars=pars, withDy=True)
+    # model params (keep yours; change as needed)
+    pars = dict(n_agents=n_agents, speed=0.5, K_phase=0.3, gamma=0.12, k_couple=0.05)
 
-    trajs = [Y[:, DIM*i:DIM*(i+1)] for i in range(n)]
-    times = [t for _ in range(n)]
+    # drift and noise maps for SDE
+    def d(x):
+        return rhs_all(0.0, x, pars).astype(np.float64, copy=False)
+
+    def s(x, dw):
+        # additive, coordinate-wise noise; same dimension as state
+        return (noise_strength * dw).astype(np.float64, copy=False)
+
+    sde = SDE(d, s, sdim=len(Y0))
+
+    # integrate on a fixed grid (longer horizon helps show the noise effect)
+    T = np.arange(0.0, 50.0, 0.01, dtype=np.float64)
+    _, Y, _ = sde.integrateAt(T, Y0, dtype=np.float64)
+
+    # split per agent (each agent has DIM coordinates)
+    trajs = [Y[:, DIM*i:DIM*(i+1)] for i in range(n_agents)]
+    times = [T for _ in range(n_agents)]
     return trajs, times
 
 def build_biased_P(D, ix, iy, small=0.03, big=1.0, col_norm=0.9):
@@ -289,7 +305,7 @@ def build_intersection_lines_nd(boundaries=(0.3, 0.7), n_points=60, dim=DIM):
 def animate_continuous_agents():
     """Run simulation projected to 6 views, and animate"""
     PROJECTIONS_2x4 = make_projection_set(num=6, n=DIM, base_seed=17)
-    trajs, times = create_continuous_trajectories()
+    trajs, times = create_continuous_trajectories(noise_strength=0.05)
     n_agents = len(trajs)
 
     total_time = max(times[i][-1] for i in range(n_agents))
@@ -396,7 +412,7 @@ def animate_continuous_agents():
 
     anim = FuncAnimation(fig, update, frames=len(uniform_times),
                          init_func=init, interval=1000/fps, blit=True, repeat=True)
-    anim.save("agents_animation_7Dc.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
+    anim.save("agents_animation_7Da.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
     return anim
 
 

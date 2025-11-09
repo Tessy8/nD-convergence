@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from scipy.interpolate import interp1d
 from integro_sde.sde import SDE
+from plotmisc.stats import qqplot
 
 lower_boundary = 0.3
 upper_boundary = 0.7
@@ -173,8 +174,24 @@ def build_p_from_segment(T, Y, n_agents, t_start, t_end, torus=True):
     return p
 
 def distance_from_diagonal(p):
-    """Professor’s metric: std across coordinates (one value per column)."""
-    return p.std(axis=0)
+    """
+    Circular version of distance-from-diagonal:
+    for each 4D point (a column of p in [0,1)),
+    compute circular mean on the circle and the std of
+    minimal circular differences to that mean.
+    Returns one value per column.
+    """
+    # p: (D, N) in [0,1)
+    p = np.mod(p, 1.0)
+    theta = 2 * np.pi * p           # (D, N)
+    c = np.cos(theta).mean(axis=0)  # (N,)
+    s = np.sin(theta).mean(axis=0)  # (N,)
+    ang = np.arctan2(s, c)          # mean direction, shape (N,)
+    center = ang / (2 * np.pi)      # back to [0,1) “phase”
+
+    # minimal circular differences in [-0.5, 0.5)
+    diffs = wrap_signed(p - center[None, :])
+    return diffs.std(axis=0)
 
 def gaussian_reference(D, M):
     """Reference from i.i.d. N(0,1): same metric as data."""
@@ -337,31 +354,51 @@ def build_intersection_lines_4d(boundaries=(0.3, 0.7), n_points=60):
 def animate_continuous_agents():
     """Run simulation projected to 6 views, and animate"""
     PROJECTIONS_2x4 = make_projection_set(num=6, n=4, base_seed=17)
-    trajs, times, T, Y, n_agents = create_continuous_trajectories(0)
+    trajs, times, T, Y, n_agents = create_continuous_trajectories(noise_strength=0)
 
     # Gaussian check (early and late)
     Tend = T[-1]
-    p_early = build_p_from_segment(T, Y, n_agents, t_start=T[0],      t_end=Tend*0.1)
-    p_late  = build_p_from_segment(T, Y, n_agents, t_start=Tend*0.95, t_end=Tend)
+    p_early = build_p_from_segment(T, Y, n_agents, t_start=T[0],      t_end=Tend*0.05)
+    p_late  = build_p_from_segment(T, Y, n_agents, t_start=Tend*0.9, t_end=Tend)
 
     data_early = distance_from_diagonal(p_early)
     data_late  = distance_from_diagonal(p_late)
 
-    ref_early = gaussian_reference(4, M=10*data_early.size)
-    ref_late  = gaussian_reference(4, M=10*data_late.size)
+    ref_early = gaussian_reference(4, M=data_early.size)
+    ref_late  = gaussian_reference(4, M=data_late.size)
 
-    plt.figure(figsize=(10,4))
-    plt.subplot(1,2,1)
-    plot_cdf(data_early, "sim early")
-    plot_cdf(ref_early,  "gauss ref (early)")
-    plt.title("CDF - early"); plt.grid(alpha=0.3); plt.legend()
+    plt.figure(figsize=(10, 4))
 
-    plt.subplot(1,2,2)
-    plot_cdf(data_late,  "sim late")
-    plot_cdf(ref_late,   "gauss ref (late)")
-    plt.title("CDF - late"); plt.grid(alpha=0.3); plt.legend()
+    # QQ plot: simulation vs Gaussian reference (early)
+    plt.subplot(1, 2, 1)
+    qqplot(data_early, ref_early, label="early")
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    lo = min(xmin, ymin)
+    hi = max(xmax, ymax)
+    plt.plot([lo, hi], [lo, hi], 'k--', linewidth=1, label="y=x")
+    plt.xlim(lo, hi)
+    plt.ylim(lo, hi)
+    plt.title("QQ: early vs Gaussian ref")
+    plt.grid(alpha=0.3)
+    plt.legend()
+
+    # QQ plot: simulation vs Gaussian reference (late)
+    plt.subplot(1, 2, 2)
+    qqplot(data_late, ref_late, label="late")
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    lo = min(xmin, ymin)
+    hi = max(xmax, ymax)
+    plt.plot([lo, hi], [lo, hi], 'k--', linewidth=1, label="y=x")
+    plt.xlim(lo, hi)
+    plt.ylim(lo, hi)
+    plt.title("QQ: late vs Gaussian ref")
+    plt.grid(alpha=0.3)
+    plt.legend()
+
     plt.tight_layout()
-    plt.savefig("cdf_compare_early_late.png", dpi=160)
+    plt.savefig("qq_compare_early_late.png", dpi=160)
 
     total_time = max(times[i][-1] for i in range(n_agents))
     fps = 30
