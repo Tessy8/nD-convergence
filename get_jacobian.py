@@ -113,38 +113,36 @@ def segment_wrap_jumps(x, y, jump=0.5):
     return x2, y2
 
 
-def rhs_one(coords, speed=0.5, K_phase=2.0, gamma=0.12):
-    """Contraction to phase center with a hard fast/slow phase gate."""
+def rhs_one(coords, delta=0.1):
+    """
+    Professor's simple hybrid model, implemented in [0,1) coordinates.
+
+    Let u_i = coords[i] in [0,1).
+    Interpret x_i = 2*pi*u_i - pi in [-pi, pi).
+    Then:
+      if x_i < 0 and sum_j x_j > 1:  dx_i/dt = 1
+      else:                          dx_i/dt = 1 - delta
+
+    In u-coordinates, du_i/dt = dx_i/dt / (2*pi).
+    """
     coords = np.mod(coords, 1.0)
     D = coords.size
 
-    def zone(c):
-        if c < lower_boundary:
-            return 0
-        elif c <= upper_boundary:
-            return 1
-        else:
-            return 2
+    # angles in [-pi, pi)
+    x = 2.0 * np.pi * coords - np.pi
+    sum_x = np.sum(x)
 
-    zones = [zone(c) for c in coords]
+    # speeds in u-space
+    fast_u = 1.0 / (2.0 * np.pi)
+    slow_u = (1.0 - delta) / (2.0 * np.pi)
 
+    v = np.full(D, slow_u, dtype=float)
+    if sum_x > 1.0:
+        mask = (x < 0.0)
+        v[mask] = fast_u
+
+    # phase "center" (used only for section / plotting)
     center = circular_mean(coords)
-    diffs  = wrap_signed(coords - center)
-    spread = np.max(np.abs(diffs))
-
-    s0, s1 = 0.02, 0.15
-    g = np.clip((spread - s0) / (s1 - s0), 0.0, 1.0)
-
-    base = np.ones(D)
-    if not all(z == 1 for z in zones):
-        for i in range(D):
-            if (zones[i] == 0) and any(zones[j] == 1 for j in range(D) if j != i):
-                base[i] = 1.0 + 0.5 * g
-
-    dphase = np.abs(wrap_signed(center - BAND_CENTER))
-    gain = SLOW if dphase <= BAND_HALF else FAST
-
-    v = gain * speed * base - gamma * diffs
     return v, center
 
 
@@ -168,48 +166,95 @@ _MAX_EVENTS_PER_STEP = 64
 _GAIN_CLIP = 10.0
 
 
-def _first_guard_event(Y, F, dt_max,
-                       lower=lower_boundary, upper=upper_boundary):
-    """Earliest guard crossing within [0, dt_max] via linear extrapolation."""
+def _first_guard_event(Y, F, dt_max, pars):
+    """
+    Earliest guard crossing within [0, dt_max] for the simple model.
+
+    Guards (in x-coordinates):
+      1) x_i = 0   <=> u_i = 0.5
+      2) sum_i x_i = 1  <=> sum_i u_i = (1 + D*pi)/(2*pi)
+
+    Y: current state in u-coordinates (in R^N, typically mod 1)
+    F: current du/dt (same shape)
+    """
+    Y = np.asarray(Y, dtype=float)
+    F = np.asarray(F, dtype=float)
+    D = pars.get("dim", 4)
+    N = Y.size
+
+    # Work in local u-coordinates (no wrapping over one step).
+    u = np.mod(Y, 1.0)
     events = []
-    for idx, (y, f) in enumerate(zip(Y, F)):
-        if abs(f) < _TINY_FLOW:
+
+    # 1) Coordinate guards: u_i = 0.5
+    for idx, (ui, fi) in enumerate(zip(u, F)):
+        if abs(fi) < _TINY_FLOW:
             continue
-        y0 = y % 1.0
-        if f > 0:
-            if y0 < lower:
-                t = (lower - y0) / f
-                if 0 < t <= dt_max:
-                    events.append((t, idx, lower, +1))
-            elif y0 <= upper:
-                t = (upper - y0) / f
-                if 0 < t <= dt_max:
-                    events.append((t, idx, upper, +1))
-        else:
-            if y0 > upper:
-                t = (upper - y0) / f
-                if 0 < t <= dt_max:
-                    events.append((t, idx, upper, -1))
-            elif y0 >= lower:
-                t = (lower - y0) / f
-                if 0 < t <= dt_max:
-                    events.append((t, idx, lower, -1))
+        t_hit = (0.5 - ui) / fi
+        if 0.0 < t_hit <= dt_max:
+            direction = np.sign(fi)  # +1 if crossing upward, -1 otherwise
+            events.append((t_hit, "xi", idx, direction))
+
+    # 2) Sum guard: sum x_i = 1  <=> sum u_i = (1 + D*pi)/(2*pi)
+    sum_u  = np.sum(u)
+    sum_F  = np.sum(F)
+    if abs(sum_F) >= _TINY_FLOW:
+        c_sum = (1.0 + D * np.pi) / (2.0 * np.pi)
+        t_sum = (c_sum - sum_u) / sum_F
+        if 0.0 < t_sum <= dt_max:
+            direction = np.sign(sum_F)
+            events.append((t_sum, "sum", None, direction))
+
     if not events:
         return None
     events.sort(key=lambda e: e[0])
     return events[0]
 
 
-def _eval_F_plus_after_crossing(fun, t, Y_cross, idx, direction, pars):
+def _eval_F_plus_after_crossing(fun, t, Y_cross, event_kind, idx, direction, pars):
+    """
+    Evaluate F^+ just beyond a guard, by nudging along the event normal.
+
+    event_kind: "xi"  => plane x_i = 0  (normal e_i)
+                "sum" => plane sum x_i = 1  (normal all-ones)
+    """
     Yp = np.array(Y_cross, dtype=float, copy=True)
-    Yp[idx] = Yp[idx] + (_TINY_PUSH if direction > 0 else -_TINY_PUSH)
+
+    if event_kind == "xi":
+        Yp[idx] += direction * _TINY_PUSH
+
+    elif event_kind == "sum":
+        N = Yp.size
+        Yp += (direction * _TINY_PUSH / np.sqrt(N))
+
+    else:
+        raise ValueError(f"Unknown event_kind={event_kind!r}")
+
     return fun(t, Yp, pars)
 
 
-def _apply_saltation_update(J, deltaF, row, denom):
-    gain = np.linalg.norm(deltaF) / max(abs(denom), _TINY_FLOW)
+def _apply_saltation_update(J, deltaF, n, F_minus):
+    """
+    General saltation update (no reset case):
+
+      Xi = I + (deltaF * n^T) / (n^T F_minus)
+      J  <- Xi @ J
+
+    We implement this as:
+      row = n^T J
+      J  += (deltaF * row^T) / (n^T F_minus)
+
+    with a clip on the gain for robustness.
+    """
+    denom = float(np.dot(n, F_minus))
+    gain  = np.linalg.norm(deltaF) / max(abs(denom), _TINY_FLOW)
+
     if gain > _GAIN_CLIP:
         deltaF = deltaF * (_GAIN_CLIP / gain)
+
+    row = n @ J  # shape (N,)
+    if abs(denom) < _TINY_FLOW:
+        denom = np.copysign(_TINY_FLOW, denom if denom != 0.0 else 1.0)
     J += np.outer(deltaF, row) / denom
     return J
 
@@ -237,45 +282,60 @@ def make_initials_for_dim(D):
         return [np.concatenate([b, e]) for b, e in zip(base4, extras)]
     raise ValueError(f"Unsupported dimension D={D}")
 
+# def make_initials_for_dim(D):
+#     """
+#     Return a single D-dimensional initial condition (one agent).
+#     Reuse the old base4 seed for consistency.
+#     """
+#     base4_0 = np.array([0.09, 0.37, 0.10, 0.25])
+
+#     if D == 2:
+#         return [base4_0[:2].copy()]
+
+#     if D == 4:
+#         return [base4_0.copy()]
+
+#     if D == 7:
+#         extras0 = np.array([0.31, 0.37, 0.33])
+#         return [np.concatenate([base4_0, extras0])]
+
+#     # generic fallback: small deviation from diagonal
+#     u0 = 0.2 + 0.05 * np.linspace(0, 1, D)
+#     return [u0]
+
 
 def rhs_all_D(t, Y, pars):
+    """
+    Apply the simple hybrid model blockwise to each agent.
+
+    Typically we'll use n_agents = 1 so the whole state is just one D-block.
+    """
     n_agents = pars["n_agents"]
     D        = pars.get("dim", 4)
+    delta    = pars.get("delta", 0.4)
 
-    speed    = pars.get("speed",   0.4)
-    K_phase  = pars.get("K_phase", 2.0)
-    gamma    = pars.get("gamma",   3.0)
-    k_couple = pars.get("k_couple", 0.2)
-
-    Y = np.asarray(Y)
+    Y = np.asarray(Y, dtype=float)
     dY = np.zeros_like(Y)
     centers = np.zeros(n_agents)
 
     for i in range(n_agents):
         sl = slice(D * i, D * (i + 1))
-        v_i, phi_i = rhs_one(Y[sl], speed=speed, K_phase=K_phase, gamma=gamma)
+        v_i, phi_i = rhs_one(Y[sl], delta=delta)
         dY[sl] = v_i
         centers[i] = phi_i
 
-    phi_bar = circular_mean(centers)
-    for i in range(n_agents):
-        phase_err = wrap_signed(phi_bar - centers[i])
-        sl = slice(D * i, D * (i + 1))
-        dY[sl] += k_couple * phase_err
+    # No inter-agent coupling in this toy model
     return dY
 
 
 def jacobian_rhs_all_D_fd(Y, pars, eps=1e-6):
-    Y = np.asarray(Y, dtype=float)
-    N = Y.size
-    F0 = rhs_all_D(0.0, Y, pars)
-    J = np.zeros((N, N), dtype=float)
-    for j in range(N):
-        dY = np.zeros_like(Y)
-        dY[j] = eps
-        F1 = rhs_all_D(0.0, Y + dY, pars)
-        J[:, j] = (F1 - F0) / eps
-    return J
+    """
+    For the professor's model, the vector field is piecewise constant
+    in each region, so the continuous Jacobian is zero.
+    All the action comes from saltation matrices at the guards.
+    """
+    N = len(Y)
+    return np.zeros((N, N), dtype=float)
 
 
 # ============================ Mean-phase section tools ======================
@@ -337,6 +397,7 @@ def grad_phi_fd(Y, pars, eps=1e-6):
 def integrate_J_over_interval(Y_start, t_a, t_b, pars, dt_max=5e-3, eps_J=1e-6):
     """
     Integrate variational dynamics from t_a to t_b with saltations at guards.
+    (Simple model: continuous Jacobian is zero, only saltation jumps.)
     Returns (J, Y_end).
     """
     N = Y_start.size
@@ -349,43 +410,47 @@ def integrate_J_over_interval(Y_start, t_a, t_b, pars, dt_max=5e-3, eps_J=1e-6):
 
     while t_b - t_now > _TINY_TIME:
         step_cap = min(dt_max, t_b - t_now)
+
         # guard before end of this micro-step?
-        ev = _first_guard_event(Ya, Fa, step_cap,
-                                lower=lower_boundary, upper=upper_boundary)
+        ev = _first_guard_event(Ya, Fa, step_cap, pars)
         if ev is None:
-            # purely continuous micro-step
-            A = jacobian_rhs_all_D_fd(Ya, pars, eps=eps_J)
+            # purely continuous micro-step: dJ/dt = 0, so J stays constant
             dt = step_cap
-            J = (np.eye(N) + dt * A) @ J
             Ya = Ya + dt * Fa
             t_now += dt
             Fa = rhs_all_D(t_now, Ya, pars)
             continue
 
-        # go to guard
-        dt_hit, idx, c, direction = ev
+        dt_hit, kind, idx, direction = ev
+
+        # advance to the guard
         if dt_hit > _TINY_TIME:
-            A = jacobian_rhs_all_D_fd(Ya, pars, eps=eps_J)
-            J = (np.eye(N) + dt_hit * A) @ J
             Ya = Ya + dt_hit * Fa
             t_now += dt_hit
 
         # saltation at guard
-        F_plus = _eval_F_plus_after_crossing(rhs_all_D, t_now, Ya, idx, direction, pars)
+        F_plus = _eval_F_plus_after_crossing(rhs_all_D, t_now, Ya,
+                                             kind, idx, direction, pars)
         deltaF = F_plus - Fa
-        denom  = 0.5 * (Fa[idx] + F_plus[idx])
-        if abs(denom) >= _TINY_FLOW:
-            row = J[idx, :]
-            J = _apply_saltation_update(J, deltaF, row, denom)
 
-        Ya = Ya  # already at guard
-        Fa = F_plus
+        # normal for this event
+        if kind == "xi":
+            n = np.zeros(N, dtype=float)
+            n[idx] = 1.0
+        elif kind == "sum":
+            n = np.ones(N, dtype=float)
+        else:
+            raise ValueError(f"Unknown guard kind={kind!r}")
 
-        # de-bounce hop
+        # apply saltation
+        J = _apply_saltation_update(J, deltaF, n, Fa)
+
+        Ya = Ya       # already at the guard
+        Fa = F_plus   # post-event vector field
+
+        # small hop after the event to avoid sticking exactly on the guard
         if t_b - t_now > _TINY_TIME:
             hop = min(_POST_EVENT_DT, t_b - t_now)
-            A = jacobian_rhs_all_D_fd(Ya, pars, eps=eps_J)
-            J = (np.eye(N) + hop * A) @ J
             Ya = Ya + hop * Fa
             t_now += hop
             Fa = rhs_all_D(t_now, Ya, pars)
@@ -539,22 +604,19 @@ def analyze_cycles_poincare_multiD(
         max_returns=6):
     """
     For each D:
-      * build system
-      * compute Poincaré return Jacobians to mean-phase section (phi_star)
+      * build system with the simple hybrid model
+      * compute Poincaré return Jacobians
       * print eigenvalues and transverse contraction
     """
     for D in D_list:
         initials = make_initials_for_dim(D)
-        n_agents = len(initials)
+        n_agents = len(initials)  # typically 1 now
         Y0 = np.concatenate(initials).astype(np.float64, copy=False)
 
         pars = dict(
             n_agents=n_agents,
             dim=D,
-            speed=0.5,
-            K_phase=0.3,
-            gamma=0.12,
-            k_couple=0.05,
+            delta=0.5,      # <-- professor's (1 - δ) parameter
         )
 
         Js, Ts = jacobians_poincare_full_D(
@@ -570,23 +632,22 @@ def analyze_cycles_poincare_multiD(
             mags = np.abs(eigvals)
 
             tol_neutral = 1e-3
-            # ignore near-1 neutral and near-0 (projection) modes
             neutral_mask = (np.abs(mags - 1.0) < tol_neutral) | (mags < 1e-6)
             transverse_mask = ~neutral_mask
 
             c_perp = mags[transverse_mask].max() if np.any(transverse_mask) else 1.0
-            print(f"  Return [{t_s:.3f} → {t_e:.3f}] Δt={t_e - t_s:.3f}")
-            print(f"    eigenvalues: {eigvals}")
-            print(f"    transverse contraction c_perp ≈ {c_perp}")
+        print(f"  Return [{t_s:.3f} → {t_e:.3f}] Δt={t_e - t_s:.3f}")
+        print(f"    eigenvalues: {eigvals}")
+        print(f"    transverse contraction c_perp ≈ {c_perp}")
 
 
 if __name__ == "__main__":
     # Use the TRUE return map (section-to-section), not a fixed-time map
     analyze_cycles_poincare_multiD(
         D_list=(7, 4, 2),
-        T_total=30.0,   # enough time to collect several returns
+        T_total=5000.0,   # enough time to collect several returns
         dt=5e-3,
         eps_J=1e-6,
         phi_star=BAND_CENTER,  # section at mean phase = 0.5
-        max_returns=50
+        max_returns=1000
     )
