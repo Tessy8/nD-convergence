@@ -259,6 +259,28 @@ def _apply_saltation_update(J, deltaF, n, F_minus):
     return J
 
 
+def _apply_flow_projection_update(J, F, n):
+    """
+    Linear part of the map that flows along constant F until hitting
+    the hyperplane {x | n^T x = b}:
+
+      x_hit(x) = x + ((b - n^T x)/(n^T F)) F
+
+    so
+
+      D_x x_hit = I - F n^T / (n^T F).
+
+    We update J <- (I - F n^T / (n^T F)) @ J.
+    """
+    denom = float(np.dot(n, F))
+    if abs(denom) < _TINY_FLOW:
+        denom = np.copysign(_TINY_FLOW, denom if denom != 0.0 else 1.0)
+
+    row = n @ J  # shape (N,)
+    J -= np.outer(F, row) / denom
+    return J
+
+
 # ============================ System RHS (multi-agent) ======================
 
 def make_initials_for_dim(D):
@@ -281,27 +303,6 @@ def make_initials_for_dim(D):
         ]
         return [np.concatenate([b, e]) for b, e in zip(base4, extras)]
     raise ValueError(f"Unsupported dimension D={D}")
-
-# def make_initials_for_dim(D):
-#     """
-#     Return a single D-dimensional initial condition (one agent).
-#     Reuse the old base4 seed for consistency.
-#     """
-#     base4_0 = np.array([0.09, 0.37, 0.10, 0.25])
-
-#     if D == 2:
-#         return [base4_0[:2].copy()]
-
-#     if D == 4:
-#         return [base4_0.copy()]
-
-#     if D == 7:
-#         extras0 = np.array([0.31, 0.37, 0.33])
-#         return [np.concatenate([base4_0, extras0])]
-
-#     # generic fallback: small deviation from diagonal
-#     u0 = 0.2 + 0.05 * np.linspace(0, 1, D)
-#     return [u0]
 
 
 def rhs_all_D(t, Y, pars):
@@ -332,7 +333,7 @@ def jacobian_rhs_all_D_fd(Y, pars, eps=1e-6):
     """
     For the professor's model, the vector field is piecewise constant
     in each region, so the continuous Jacobian is zero.
-    All the action comes from saltation matrices at the guards.
+    All the action comes from flow projections and saltation at the guards.
     """
     N = len(Y)
     return np.zeros((N, N), dtype=float)
@@ -396,8 +397,14 @@ def grad_phi_fd(Y, pars, eps=1e-6):
 
 def integrate_J_over_interval(Y_start, t_a, t_b, pars, dt_max=5e-3, eps_J=1e-6):
     """
-    Integrate variational dynamics from t_a to t_b with saltations at guards.
-    (Simple model: continuous Jacobian is zero, only saltation jumps.)
+    Integrate variational dynamics from t_a to t_b with flow projections
+    and saltations at guards.
+
+    (Simple model: continuous Jacobian is zero inside each region.)
+
+    At each guard, we include the flow-to-guard projection
+         D_x x_hit = I - F n^T / (n^T F)
+    before applying the saltation matrix.
     Returns (J, Y_end).
     """
     N = Y_start.size
@@ -423,17 +430,7 @@ def integrate_J_over_interval(Y_start, t_a, t_b, pars, dt_max=5e-3, eps_J=1e-6):
 
         dt_hit, kind, idx, direction = ev
 
-        # advance to the guard
-        if dt_hit > _TINY_TIME:
-            Ya = Ya + dt_hit * Fa
-            t_now += dt_hit
-
-        # saltation at guard
-        F_plus = _eval_F_plus_after_crossing(rhs_all_D, t_now, Ya,
-                                             kind, idx, direction, pars)
-        deltaF = F_plus - Fa
-
-        # normal for this event
+        # normal for this event in full state space
         if kind == "xi":
             n = np.zeros(N, dtype=float)
             n[idx] = 1.0
@@ -442,13 +439,25 @@ def integrate_J_over_interval(Y_start, t_a, t_b, pars, dt_max=5e-3, eps_J=1e-6):
         else:
             raise ValueError(f"Unknown guard kind={kind!r}")
 
-        # apply saltation
+        # 1) flow-to-guard projection derivative
+        J = _apply_flow_projection_update(J, Fa, n)
+
+        # 2) advance to the guard along the base trajectory
+        if dt_hit > _TINY_TIME:
+            Ya = Ya + dt_hit * Fa
+            t_now += dt_hit
+
+        # 3) saltation at guard
+        F_plus = _eval_F_plus_after_crossing(rhs_all_D, t_now, Ya,
+                                             kind, idx, direction, pars)
+        deltaF = F_plus - Fa
+
         J = _apply_saltation_update(J, deltaF, n, Fa)
 
         Ya = Ya       # already at the guard
         Fa = F_plus   # post-event vector field
 
-        # small hop after the event to avoid sticking exactly on the guard
+        # 4) small hop after the event to avoid sticking exactly on the guard
         if t_b - t_now > _TINY_TIME:
             hop = min(_POST_EVENT_DT, t_b - t_now)
             Ya = Ya + hop * Fa
@@ -526,7 +535,8 @@ def B_derivative_flow_with_saltation(
     """
     Bouligand derivative of the hybrid flow map from t_a to t_b
     at base point Y_start, using:
-      * continuous variational dynamics dJ/dt = A(Y) J,
+      * continuous variational dynamics dJ/dt = A(Y) J (here A=0),
+      * flow-to-guard projections,
       * saltation rank-one updates at each guard crossing.
 
     Returns:
@@ -548,7 +558,7 @@ def jacobians_poincare_full_D(
       1) integrate once coarsely to find section-crossing times,
       2) for each consecutive pair (a,b) of section times:
            - interpolate state at a (Ya),
-           - compute B-derivative of flow a→b with saltations: J_B,
+           - compute B-derivative of flow a→b with projections+saltations: J_B,
            - compute oblique projectors at the endpoints and sandwich:
              J_ret = P_out @ J_B @ P_in.
     Returns:
@@ -557,7 +567,7 @@ def jacobians_poincare_full_D(
     """
     # 1) coarse pass to get (T,Y,dY) and section times
     ode = OdePC(rhs_all_D)
-    T, Y, dY = ode(Y0, t0=  0.0, t1=T_total, dt=dt, pars=pars, withDy=True)
+    T, Y, dY = ode(Y0, t0=0.0, t1=T_total, dt=dt, pars=pars, withDy=True)
 
     section_ts = find_section_crossings(T, Y, pars, phi_star=phi_star,
                                         max_crossings=max_returns + 1)
@@ -574,7 +584,7 @@ def jacobians_poincare_full_D(
         g_in = grad_section_fd(Ya, pars, phi_star=phi_star)    # ∇h at the hit
         P_in = oblique_projector(g_in, f_in, tol=sec_tol)      # I - f g^T / (g^T f)
 
-        # 2c) Bouligand derivative of hybrid flow a→b with saltations
+        # 2c) Bouligand derivative of hybrid flow a→b with projections+saltations
         J_B, Yb = B_derivative_flow_with_saltation(
             Ya, a, b, pars, dt_max=dt, eps_J=eps_J
         )
@@ -601,23 +611,28 @@ def analyze_cycles_poincare_multiD(
         dt=5e-3,
         eps_J=1e-6,
         phi_star=BAND_CENTER,
-        max_returns=6):
-    """
-    For each D:
-      * build system with the simple hybrid model
-      * compute Poincaré return Jacobians
-      * print eigenvalues and transverse contraction
-    """
+        max_returns=6,
+        single_agent=True):
+
     for D in D_list:
-        initials = make_initials_for_dim(D)
-        n_agents = len(initials)  # typically 1 now
+        if single_agent:
+            # *** NEW: start exactly on the diagonal ***
+            u0_val = 0.3  # any value not on a guard is fine
+            initials = [np.full(D, u0_val, dtype=float)]
+        else:
+            all_initials = make_initials_for_dim(D)
+            initials = [b.copy() for b in all_initials]
+
+        n_agents = len(initials)
         Y0 = np.concatenate(initials).astype(np.float64, copy=False)
 
         pars = dict(
             n_agents=n_agents,
             dim=D,
-            delta=0.5,      # <-- professor's (1 - δ) parameter
+            delta=0.5,
         )
+
+        lambda_perp_theory = 1.0 - pars["delta"]
 
         Js, Ts = jacobians_poincare_full_D(
             Y0, pars, T_total=T_total, dt=dt, eps_J=eps_J,
@@ -625,7 +640,9 @@ def analyze_cycles_poincare_multiD(
         )
 
         print(f"\n=== D={D} (Poincaré at phi*={phi_star}) ===")
+        print(f"n_agents = {n_agents}")
         print(f"Returns found: {len(Js)} over [0, {T_total}]")
+        print(f"  Theoretical |λ_perp| (single-agent diagonal) = {lambda_perp_theory:.6f}")
 
         for (J, (t_s, t_e)) in zip(Js, Ts):
             eigvals, _ = np.linalg.eig(J)
@@ -636,18 +653,21 @@ def analyze_cycles_poincare_multiD(
             transverse_mask = ~neutral_mask
 
             c_perp = mags[transverse_mask].max() if np.any(transverse_mask) else 1.0
-        print(f"  Return [{t_s:.3f} → {t_e:.3f}] Δt={t_e - t_s:.3f}")
-        print(f"    eigenvalues: {eigvals}")
-        print(f"    transverse contraction c_perp ≈ {c_perp}")
+
+            print(f"  Return [{t_s:.3f} → {t_e:.3f}] Δt={t_e - t_s:.3f}")
+            print(f"    eigenvalues: {eigvals}")
+            print(f"    transverse contraction c_perp (numeric) ≈ {c_perp}")
+            print(f"    theoretical |λ_perp| (ideal diag)      = {lambda_perp_theory:.6f}")
 
 
 if __name__ == "__main__":
     # Use the TRUE return map (section-to-section), not a fixed-time map
     analyze_cycles_poincare_multiD(
         D_list=(7, 4, 2),
-        T_total=5000.0,   # enough time to collect several returns
+        T_total=500.0,     # can increase if you want more returns
         dt=5e-3,
         eps_J=1e-6,
         phi_star=BAND_CENTER,  # section at mean phase = 0.5
-        max_returns=1000
+        max_returns=10,
+        single_agent=True      # <-- key for the theory comparison
     )
