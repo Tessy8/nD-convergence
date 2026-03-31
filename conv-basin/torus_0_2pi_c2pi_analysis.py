@@ -1,18 +1,18 @@
 """
-Literal professor torus model in u in [0, 2*pi)^3 with c = 2*pi.
+Literal professor model on x in [0, 2*pi)^3 with c = 2*pi.
 
-Model:
-    u_k is slow when u_k > 0 and sum(u) < 2*pi
+The rule is implemented exactly componentwise:
 
-Since the sampled grid lies in the interior of [0, 2*pi)^3, the condition
-u_k > 0 is automatically satisfied at every sampled point. Therefore the flow
-reduces to:
+    dx_k is slow when both
+      1. x_k > 0
+      2. x_1 + x_2 + x_3 < 2*pi
 
-    all coordinates slow together when sum(u) < 2*pi
-    all coordinates fast together when sum(u) > 2*pi
+and fast otherwise.
 
-This script is intentionally the literal torus model, even though that means
-relative torus offsets are preserved and only diagonal points can converge.
+Because the sampled grid lies in the interior of [0, 2*pi)^3, condition (1) is
+true at every sampled point, so the interior dynamics reduce to a shared
+fast/slow switch based only on the sum. The code still implements the
+componentwise professor rule explicitly.
 
 Outputs:
   - console summary
@@ -67,26 +67,29 @@ def torus_spread_theta(x):
     return float(np.abs(torus_residual_theta(x)).max())
 
 
-def vfield_theta(u, coord_guard_u, sum_guard, delta):
-    """Literal torus vector field in u-coordinates."""
-    u = wrap_theta(u)
-    return np.where((u < coord_guard_u) | (u.sum() > sum_guard), 1.0, 1.0 - delta)
+def vfield_theta(x, coord_guard_x, sum_guard, delta):
+    """Literal professor vector field applied componentwise on x in [0, 2*pi)^3."""
+    x = wrap_theta(x)
+    sum_is_small = x.sum() < sum_guard
+    coord_is_positive = x > coord_guard_x
+    slow_mask = coord_is_positive & sum_is_small
+    return np.where(slow_mask, 1.0 - delta, 1.0)
 
 
-def integrate_pc_theta(x0, coord_guard_u, sum_guard, delta, t_max, dt, t_tol,
+def integrate_pc_theta(x0, coord_guard_x, sum_guard, delta, t_max, dt, t_tol,
                        conv_tol=0.05, conv_time=10.0):
     """Predictor-corrector integrator in [0, 2*pi)^3."""
     x = wrap_theta(x0)
     x_unwrapped = np.array(x0, dtype=float)
     h = dt
     t = 0.0
-    dx0 = vfield_theta(x, coord_guard_u, sum_guard, delta)
+    dx0 = vfield_theta(x, coord_guard_x, sum_guard, delta)
     conv_for = 0.0
     converged = False
 
     while t < t_max:
         x_trial = x + h * dx0
-        dx1 = vfield_theta(x_trial, coord_guard_u, sum_guard, delta)
+        dx1 = vfield_theta(x_trial, coord_guard_x, sum_guard, delta)
 
         if not np.allclose(dx1, dx0) and h > t_tol:
             h /= 2.0
@@ -95,7 +98,7 @@ def integrate_pc_theta(x0, coord_guard_u, sum_guard, delta, t_max, dt, t_tol,
         x_unwrapped = x_unwrapped + h * dx0
         x = wrap_theta(x + h * dx0)
         t += h
-        dx0 = vfield_theta(x, coord_guard_u, sum_guard, delta)
+        dx0 = vfield_theta(x, coord_guard_x, sum_guard, delta)
         h = min(h * 1.5, dt)
 
         if torus_spread_theta(x) < conv_tol:
@@ -128,7 +131,7 @@ def classify_grid(points, t_max, label):
     for i, x0 in enumerate(points):
         res = integrate_pc_theta(
             x0,
-            coord_guard_u=COORD_GUARD_U,
+            coord_guard_x=COORD_GUARD_U,
             sum_guard=SUM_GUARD_U,
             delta=DELTA,
             t_max=t_max,
@@ -199,14 +202,15 @@ def main():
             "conv_tol": CONV_TOL,
             "conv_time": CONV_TIME,
             "model_name": "literal_professor_torus_model",
-            "coordinate_guard_u": COORD_GUARD_U,
+            "coordinate_guard_x": COORD_GUARD_U,
             "sum_guard_u": SUM_GUARD_U,
-            "slow_region": "u_k > 0 for all k and u1 + u2 + u3 < 2*pi",
-            "fast_region": "u_k < 0 for some k or u1 + u2 + u3 > 2*pi",
+            "equation": "dx_k is slow iff x_k > 0 and x1 + x2 + x3 < 2*pi; fast otherwise",
+            "slow_region": "x_k > 0 for all k and x1 + x2 + x3 < 2*pi",
+            "fast_region": "for each k, dx_k is fast when x_k <= 0 or x1 + x2 + x3 >= 2*pi",
             "interpretation": (
-                "This is the professor's literal torus model. On the sampled "
-                "interior grid the coordinate guard is inactive, so all three "
-                "coordinates switch fast/slow together based only on the sum."
+                "This script implements the professor's rule componentwise. On "
+                "the sampled interior grid x_k > 0 holds automatically, so the "
+                "interior dynamics collapse to a shared switch based on the sum."
             ),
         },
         "grid": {
@@ -231,9 +235,10 @@ def main():
         "vector_field_check": {
             "value_at_center": vfield_theta(np.array([PI, PI, PI]), COORD_GUARD_U, SUM_GUARD_U, DELTA).tolist(),
             "value_near_origin": vfield_theta(np.array([0.2, 0.2, 0.2]), COORD_GUARD_U, SUM_GUARD_U, DELTA).tolist(),
+            "value_on_boundary_example": vfield_theta(np.array([0.0, 0.2, 0.2]), COORD_GUARD_U, SUM_GUARD_U, DELTA).tolist(),
             "expected_behavior": (
-                "When sum(u) < 2*pi, all coordinates move with the slow speed; "
-                "when sum(u) > 2*pi, all coordinates move with the fast speed."
+                "Each component is tested separately against x_k > 0, but away "
+                "from the boundary all sampled coordinates satisfy that test."
             ),
         },
         "timing": {

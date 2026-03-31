@@ -1,0 +1,235 @@
+{
+  "model": {
+    "torus_domain": [
+      0.0,
+      6.283185307179586
+    ],
+    "dimension": 3,
+    "delta": 0.5,
+    "dt": 0.05,
+    "t_tol": 1e-05,
+    "conv_tol": 0.05,
+    "conv_time": 10.0,
+    "model_name": "literal_professor_torus_model",
+    "coordinate_guard_u": 0.0,
+    "sum_guard_u": 6.283185307179586,
+    "slow_region": "u_k > 0 for all k and u1 + u2 + u3 < 2*pi",
+    "fast_region": "u_k < 0 for some k or u1 + u2 + u3 > 2*pi",
+    "interpretation": "This is the professor's literal torus model. On the sampled interior grid the coordinate guard is inactive, so all three coordinates switch fast/slow together based only on the sum."
+  },
+  "grid": {
+    "n_per_axis": 9,
+    "margin": 0.35,
+    "total_points": 729,
+    "axis_values": [
+      0.35,
+      1.047898,
+      1.745796,
+      2.443694,
+      3.141593,
+      3.839491,
+      4.537389,
+      5.235287,
+      5.933185
+    ]
+  },
+  "standard_vs_long_horizon": {
+    "counts": {
+      "converged_t120": 9,
+      "converged_t400": 9,
+      "gained_by_more_time": 0,
+      "lost_by_more_time": 0,
+      "converged_both": 9,
+      "converged_neither": 720
+    },
+    "fractions": {
+      "fraction_converged_t120": 0.012345679012345678,
+      "fraction_converged_t400": 0.012345679012345678,
+      "fraction_nonconverged_t120_that_converge_t400": 0.0
+    },
+    "sample_points": {
+      "gained_by_more_time": [],
+      "lost_by_more_time": [],
+      "converged_both": [
+        [
+          0.35,
+          0.35,
+          0.35
+        ],
+        [
+          1.047898,
+          1.047898,
+          1.047898
+        ],
+        [
+          1.745796,
+          1.745796,
+          1.745796
+        ],
+        [
+          2.443694,
+          2.443694,
+          2.443694
+        ],
+        [
+          3.141593,
+          3.141593,
+          3.141593
+        ],
+        [
+          3.839491,
+          3.839491,
+          3.839491
+        ],
+        [
+          4.537389,
+          4.537389,
+          4.537389
+        ],
+        [
+          5.235287,
+          5.235287,
+          5.235287
+        ],
+        [
+          5.933185,
+          5.933185,
+          5.933185
+        ]
+      ],
+      "converged_neither": [
+        [
+          0.35,
+          0.35,
+          1.047898
+        ],
+        [
+          0.35,
+          0.35,
+          1.745796
+        ],
+        [
+          0.35,
+          0.35,
+          2.443694
+        ],
+        [
+          0.35,
+          0.35,
+          3.141593
+        ],
+        [
+          0.35,
+          0.35,
+          3.839491
+        ],
+        [
+          0.35,
+          0.35,
+          4.537389
+        ],
+        [
+          0.35,
+          0.35,
+          5.235287
+        ],
+        [
+          0.35,
+          0.35,
+          5.933185
+        ],
+        [
+          0.35,
+          1.047898,
+          0.35
+        ],
+        [
+          0.35,
+          1.047898,
+          1.047898
+        ],
+        [
+          0.35,
+          1.047898,
+          1.745796
+        ],
+        [
+          0.35,
+          1.047898,
+          2.443694
+        ],
+        [
+          0.35,
+          1.047898,
+          3.141593
+        ],
+        [
+          0.35,
+          1.047898,
+          3.839491
+        ],
+        [
+          0.35,
+          1.047898,
+          4.537389
+        ],
+        [
+          0.35,
+          1.047898,
+          5.235287
+        ],
+        [
+          0.35,
+          1.047898,
+          5.933185
+        ],
+        [
+          0.35,
+          1.745796,
+          0.35
+        ],
+        [
+          0.35,
+          1.745796,
+          1.047898
+        ],
+        [
+          0.35,
+          1.745796,
+          1.745796
+        ]
+      ]
+    }
+  },
+  "geometric_breakdown": {
+    "points_inside_slow_simplex": 120,
+    "points_outside_slow_simplex": 609,
+    "fraction_inside_slow_simplex": 0.1646090534979424,
+    "expected_volume_fraction_simplex": 0.16666666666666666,
+    "converged_t120_inside_slow_simplex": 3,
+    "converged_t120_outside_slow_simplex": 6,
+    "converged_t400_inside_slow_simplex": 3,
+    "converged_t400_outside_slow_simplex": 6,
+    "gained_by_more_time_inside_slow_simplex": 0,
+    "gained_by_more_time_outside_slow_simplex": 0
+  },
+  "vector_field_check": {
+    "value_at_center": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "value_near_origin": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "expected_behavior": "When sum(u) < 2*pi, all coordinates move with the slow speed; when sum(u) > 2*pi, all coordinates move with the fast speed."
+  },
+  "timing": {
+    "mean_t_final_t120": 118.6620661422626,
+    "mean_t_final_t400": 395.20812881274213,
+    "max_t_final_t120": 120.04999999999532,
+    "max_t_final_t400": 400.04997836227733
+  }
+}
