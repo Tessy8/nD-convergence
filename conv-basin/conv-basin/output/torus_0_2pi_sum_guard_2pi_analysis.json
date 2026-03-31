@@ -1,0 +1,726 @@
+{
+  "model": {
+    "torus_domain": [
+      0.0,
+      6.283185307179586
+    ],
+    "dimension": 3,
+    "delta": 0.5,
+    "max_workers": 3,
+    "coordinate_guard_u": 0.0,
+    "coordinate_guard_equation": "u_i = 0",
+    "baseline_sum_guard_u": 10.42477796076938,
+    "baseline_sum_guard_equation": "u1 + u2 + u3 = 1 + 3*pi",
+    "test_sum_guard_u": 6.283185307179586,
+    "test_sum_guard_equation": "u1 + u2 + u3 = 2*pi",
+    "interpretation": "Both runs use the professor's coordinate guard u_i > 0 in the interior; only the sum threshold changes.",
+    "classification_acceleration": "When coord_guard_u = 0 on the interior grid, all coordinates share the same speed at each state, so torus spread is invariant and convergence can be decided geometrically without integration. If that shortcut is disabled by a future model change, the script falls back to multiprocessing across CPU cores."
+  },
+  "grid": {
+    "n_per_axis": 9,
+    "margin": 0.35,
+    "total_points": 729,
+    "axis_values": [
+      0.35,
+      1.047898,
+      1.745796,
+      2.443694,
+      3.141593,
+      3.839491,
+      4.537389,
+      5.235287,
+      5.933185
+    ]
+  },
+  "geometry": {
+    "points_inside_baseline_slow_simplex": 455,
+    "points_inside_test_slow_simplex": 120,
+    "fraction_inside_baseline_slow_simplex": 0.6241426611796982,
+    "fraction_inside_test_slow_simplex": 0.1646090534979424,
+    "expected_test_volume_fraction_simplex": 0.16666666666666666
+  },
+  "standard_horizon_comparison": {
+    "counts": {
+      "converged_baseline_t120": 9,
+      "converged_sumguard2pi_t120": 9,
+      "converged_both": 9,
+      "converged_neither": 720,
+      "nonconverged_baseline_t120_that_converge_sumguard2pi_t120": 0,
+      "nonconverged_sumguard2pi_t120_that_converge_baseline_t120": 0
+    },
+    "fractions": {
+      "fraction_converged_baseline_t120": 0.012345679012345678,
+      "fraction_converged_sumguard2pi_t120": 0.012345679012345678,
+      "fraction_nonconverged_baseline_t120_that_converge_sumguard2pi_t120": 0.0,
+      "fraction_nonconverged_sumguard2pi_t120_that_converge_baseline_t120": 0.0
+    },
+    "sample_points": {
+      "nonconverged_baseline_t120_that_converge_sumguard2pi_t120": [],
+      "nonconverged_sumguard2pi_t120_that_converge_baseline_t120": [],
+      "converged_both": [
+        [
+          0.35,
+          0.35,
+          0.35
+        ],
+        [
+          1.047898,
+          1.047898,
+          1.047898
+        ],
+        [
+          1.745796,
+          1.745796,
+          1.745796
+        ],
+        [
+          2.443694,
+          2.443694,
+          2.443694
+        ],
+        [
+          3.141593,
+          3.141593,
+          3.141593
+        ],
+        [
+          3.839491,
+          3.839491,
+          3.839491
+        ],
+        [
+          4.537389,
+          4.537389,
+          4.537389
+        ],
+        [
+          5.235287,
+          5.235287,
+          5.235287
+        ],
+        [
+          5.933185,
+          5.933185,
+          5.933185
+        ]
+      ],
+      "converged_neither": [
+        [
+          0.35,
+          0.35,
+          1.047898
+        ],
+        [
+          0.35,
+          0.35,
+          1.745796
+        ],
+        [
+          0.35,
+          0.35,
+          2.443694
+        ],
+        [
+          0.35,
+          0.35,
+          3.141593
+        ],
+        [
+          0.35,
+          0.35,
+          3.839491
+        ],
+        [
+          0.35,
+          0.35,
+          4.537389
+        ],
+        [
+          0.35,
+          0.35,
+          5.235287
+        ],
+        [
+          0.35,
+          0.35,
+          5.933185
+        ],
+        [
+          0.35,
+          1.047898,
+          0.35
+        ],
+        [
+          0.35,
+          1.047898,
+          1.047898
+        ],
+        [
+          0.35,
+          1.047898,
+          1.745796
+        ],
+        [
+          0.35,
+          1.047898,
+          2.443694
+        ],
+        [
+          0.35,
+          1.047898,
+          3.141593
+        ],
+        [
+          0.35,
+          1.047898,
+          3.839491
+        ],
+        [
+          0.35,
+          1.047898,
+          4.537389
+        ],
+        [
+          0.35,
+          1.047898,
+          5.235287
+        ],
+        [
+          0.35,
+          1.047898,
+          5.933185
+        ],
+        [
+          0.35,
+          1.745796,
+          0.35
+        ],
+        [
+          0.35,
+          1.745796,
+          1.047898
+        ],
+        [
+          0.35,
+          1.745796,
+          1.745796
+        ]
+      ]
+    }
+  },
+  "long_horizon_comparison": {
+    "counts": {
+      "converged_baseline_t400": 9,
+      "converged_sumguard2pi_t400": 9,
+      "converged_both": 9,
+      "converged_neither": 720,
+      "nonconverged_baseline_t400_that_converge_sumguard2pi_t400": 0,
+      "nonconverged_sumguard2pi_t400_that_converge_baseline_t400": 0
+    },
+    "fractions": {
+      "fraction_converged_baseline_t400": 0.012345679012345678,
+      "fraction_converged_sumguard2pi_t400": 0.012345679012345678,
+      "fraction_nonconverged_baseline_t400_that_converge_sumguard2pi_t400": 0.0,
+      "fraction_nonconverged_sumguard2pi_t400_that_converge_baseline_t400": 0.0
+    },
+    "sample_points": {
+      "nonconverged_baseline_t400_that_converge_sumguard2pi_t400": [],
+      "nonconverged_sumguard2pi_t400_that_converge_baseline_t400": [],
+      "converged_both": [
+        [
+          0.35,
+          0.35,
+          0.35
+        ],
+        [
+          1.047898,
+          1.047898,
+          1.047898
+        ],
+        [
+          1.745796,
+          1.745796,
+          1.745796
+        ],
+        [
+          2.443694,
+          2.443694,
+          2.443694
+        ],
+        [
+          3.141593,
+          3.141593,
+          3.141593
+        ],
+        [
+          3.839491,
+          3.839491,
+          3.839491
+        ],
+        [
+          4.537389,
+          4.537389,
+          4.537389
+        ],
+        [
+          5.235287,
+          5.235287,
+          5.235287
+        ],
+        [
+          5.933185,
+          5.933185,
+          5.933185
+        ]
+      ],
+      "converged_neither": [
+        [
+          0.35,
+          0.35,
+          1.047898
+        ],
+        [
+          0.35,
+          0.35,
+          1.745796
+        ],
+        [
+          0.35,
+          0.35,
+          2.443694
+        ],
+        [
+          0.35,
+          0.35,
+          3.141593
+        ],
+        [
+          0.35,
+          0.35,
+          3.839491
+        ],
+        [
+          0.35,
+          0.35,
+          4.537389
+        ],
+        [
+          0.35,
+          0.35,
+          5.235287
+        ],
+        [
+          0.35,
+          0.35,
+          5.933185
+        ],
+        [
+          0.35,
+          1.047898,
+          0.35
+        ],
+        [
+          0.35,
+          1.047898,
+          1.047898
+        ],
+        [
+          0.35,
+          1.047898,
+          1.745796
+        ],
+        [
+          0.35,
+          1.047898,
+          2.443694
+        ],
+        [
+          0.35,
+          1.047898,
+          3.141593
+        ],
+        [
+          0.35,
+          1.047898,
+          3.839491
+        ],
+        [
+          0.35,
+          1.047898,
+          4.537389
+        ],
+        [
+          0.35,
+          1.047898,
+          5.235287
+        ],
+        [
+          0.35,
+          1.047898,
+          5.933185
+        ],
+        [
+          0.35,
+          1.745796,
+          0.35
+        ],
+        [
+          0.35,
+          1.745796,
+          1.047898
+        ],
+        [
+          0.35,
+          1.745796,
+          1.745796
+        ]
+      ]
+    }
+  },
+  "time_horizon_effect": {
+    "baseline": {
+      "counts": {
+        "converged_baseline_t120": 9,
+        "converged_baseline_t400": 9,
+        "converged_both": 9,
+        "converged_neither": 720,
+        "nonconverged_baseline_t120_that_converge_baseline_t400": 0,
+        "nonconverged_baseline_t400_that_converge_baseline_t120": 0
+      },
+      "fractions": {
+        "fraction_converged_baseline_t120": 0.012345679012345678,
+        "fraction_converged_baseline_t400": 0.012345679012345678,
+        "fraction_nonconverged_baseline_t120_that_converge_baseline_t400": 0.0,
+        "fraction_nonconverged_baseline_t400_that_converge_baseline_t120": 0.0
+      },
+      "sample_points": {
+        "nonconverged_baseline_t120_that_converge_baseline_t400": [],
+        "nonconverged_baseline_t400_that_converge_baseline_t120": [],
+        "converged_both": [
+          [
+            0.35,
+            0.35,
+            0.35
+          ],
+          [
+            1.047898,
+            1.047898,
+            1.047898
+          ],
+          [
+            1.745796,
+            1.745796,
+            1.745796
+          ],
+          [
+            2.443694,
+            2.443694,
+            2.443694
+          ],
+          [
+            3.141593,
+            3.141593,
+            3.141593
+          ],
+          [
+            3.839491,
+            3.839491,
+            3.839491
+          ],
+          [
+            4.537389,
+            4.537389,
+            4.537389
+          ],
+          [
+            5.235287,
+            5.235287,
+            5.235287
+          ],
+          [
+            5.933185,
+            5.933185,
+            5.933185
+          ]
+        ],
+        "converged_neither": [
+          [
+            0.35,
+            0.35,
+            1.047898
+          ],
+          [
+            0.35,
+            0.35,
+            1.745796
+          ],
+          [
+            0.35,
+            0.35,
+            2.443694
+          ],
+          [
+            0.35,
+            0.35,
+            3.141593
+          ],
+          [
+            0.35,
+            0.35,
+            3.839491
+          ],
+          [
+            0.35,
+            0.35,
+            4.537389
+          ],
+          [
+            0.35,
+            0.35,
+            5.235287
+          ],
+          [
+            0.35,
+            0.35,
+            5.933185
+          ],
+          [
+            0.35,
+            1.047898,
+            0.35
+          ],
+          [
+            0.35,
+            1.047898,
+            1.047898
+          ],
+          [
+            0.35,
+            1.047898,
+            1.745796
+          ],
+          [
+            0.35,
+            1.047898,
+            2.443694
+          ],
+          [
+            0.35,
+            1.047898,
+            3.141593
+          ],
+          [
+            0.35,
+            1.047898,
+            3.839491
+          ],
+          [
+            0.35,
+            1.047898,
+            4.537389
+          ],
+          [
+            0.35,
+            1.047898,
+            5.235287
+          ],
+          [
+            0.35,
+            1.047898,
+            5.933185
+          ],
+          [
+            0.35,
+            1.745796,
+            0.35
+          ],
+          [
+            0.35,
+            1.745796,
+            1.047898
+          ],
+          [
+            0.35,
+            1.745796,
+            1.745796
+          ]
+        ]
+      }
+    },
+    "sumguard2pi": {
+      "counts": {
+        "converged_sumguard2pi_t120": 9,
+        "converged_sumguard2pi_t400": 9,
+        "converged_both": 9,
+        "converged_neither": 720,
+        "nonconverged_sumguard2pi_t120_that_converge_sumguard2pi_t400": 0,
+        "nonconverged_sumguard2pi_t400_that_converge_sumguard2pi_t120": 0
+      },
+      "fractions": {
+        "fraction_converged_sumguard2pi_t120": 0.012345679012345678,
+        "fraction_converged_sumguard2pi_t400": 0.012345679012345678,
+        "fraction_nonconverged_sumguard2pi_t120_that_converge_sumguard2pi_t400": 0.0,
+        "fraction_nonconverged_sumguard2pi_t400_that_converge_sumguard2pi_t120": 0.0
+      },
+      "sample_points": {
+        "nonconverged_sumguard2pi_t120_that_converge_sumguard2pi_t400": [],
+        "nonconverged_sumguard2pi_t400_that_converge_sumguard2pi_t120": [],
+        "converged_both": [
+          [
+            0.35,
+            0.35,
+            0.35
+          ],
+          [
+            1.047898,
+            1.047898,
+            1.047898
+          ],
+          [
+            1.745796,
+            1.745796,
+            1.745796
+          ],
+          [
+            2.443694,
+            2.443694,
+            2.443694
+          ],
+          [
+            3.141593,
+            3.141593,
+            3.141593
+          ],
+          [
+            3.839491,
+            3.839491,
+            3.839491
+          ],
+          [
+            4.537389,
+            4.537389,
+            4.537389
+          ],
+          [
+            5.235287,
+            5.235287,
+            5.235287
+          ],
+          [
+            5.933185,
+            5.933185,
+            5.933185
+          ]
+        ],
+        "converged_neither": [
+          [
+            0.35,
+            0.35,
+            1.047898
+          ],
+          [
+            0.35,
+            0.35,
+            1.745796
+          ],
+          [
+            0.35,
+            0.35,
+            2.443694
+          ],
+          [
+            0.35,
+            0.35,
+            3.141593
+          ],
+          [
+            0.35,
+            0.35,
+            3.839491
+          ],
+          [
+            0.35,
+            0.35,
+            4.537389
+          ],
+          [
+            0.35,
+            0.35,
+            5.235287
+          ],
+          [
+            0.35,
+            0.35,
+            5.933185
+          ],
+          [
+            0.35,
+            1.047898,
+            0.35
+          ],
+          [
+            0.35,
+            1.047898,
+            1.047898
+          ],
+          [
+            0.35,
+            1.047898,
+            1.745796
+          ],
+          [
+            0.35,
+            1.047898,
+            2.443694
+          ],
+          [
+            0.35,
+            1.047898,
+            3.141593
+          ],
+          [
+            0.35,
+            1.047898,
+            3.839491
+          ],
+          [
+            0.35,
+            1.047898,
+            4.537389
+          ],
+          [
+            0.35,
+            1.047898,
+            5.235287
+          ],
+          [
+            0.35,
+            1.047898,
+            5.933185
+          ],
+          [
+            0.35,
+            1.745796,
+            0.35
+          ],
+          [
+            0.35,
+            1.745796,
+            1.047898
+          ],
+          [
+            0.35,
+            1.745796,
+            1.745796
+          ]
+        ]
+      }
+    }
+  },
+  "timing": {
+    "baseline_mean_tfinal_t120": 118.64197530864197,
+    "baseline_mean_tfinal_t400": 395.18518518518516,
+    "sumguard2pi_mean_tfinal_t120": 118.64197530864197,
+    "sumguard2pi_mean_tfinal_t400": 395.18518518518516
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "model": {
+    "torus_domain": [
+      0.0,
+      6.283185307179586
+    ],
+    "dimension": 3,
+    "delta": 0.5,
+    "dt": 0.05,
+    "t_tol": 1e-05,
+    "conv_tol": 0.05,
+    "conv_time": 10.0,
+    "coordinate_change": "u = x + pi",
+    "coordinate_guard_u": 6.283185307179586,
+    "sum_guard_u": 10.42477796076938,
+    "coordinate_guard_equation": "u_i = 2*pi",
+    "sum_guard_equation": "u1 + u2 + u3 = 1 + 3*pi",
+    "interpretation": "Remapped original model in u-coordinates. With c_u=2*pi the coordinate guard is active everywhere on the wrapped torus, so the dynamics become everywhere-fast."
+  },
+  "grid": {
+    "n_per_axis": 9,
+    "margin": 0.35,
+    "total_points": 729,
+    "axis_values": [
+      0.35,
+      1.047898,
+      1.745796,
+      2.443694,
+      3.141593,
+      3.839491,
+      4.537389,
+      5.235287,
+      5.933185
+    ]
+  },
+  "standard_vs_long_horizon": {
+    "counts": {
+      "converged_t120": 9,
+      "converged_t400": 9,
+      "gained_by_more_time": 0,
+      "lost_by_more_time": 0,
+      "converged_both": 9,
+      "converged_neither": 720
+    },
+    "fractions": {
+      "fraction_converged_t120": 0.012345679012345678,
+      "fraction_converged_t400": 0.012345679012345678,
+      "fraction_nonconverged_t120_that_converge_t400": 0.0
+    },
+    "sample_points": {
+      "gained_by_more_time": [],
+      "lost_by_more_time": [],
+      "converged_both": [
+        [
+          0.35,
+          0.35,
+          0.35
+        ],
+        [
+          1.047898,
+          1.047898,
+          1.047898
+        ],
+        [
+          1.745796,
+          1.745796,
+          1.745796
+        ],
+        [
+          2.443694,
+          2.443694,
+          2.443694
+        ],
+        [
+          3.141593,
+          3.141593,
+          3.141593
+        ],
+        [
+          3.839491,
+          3.839491,
+          3.839491
+        ],
+        [
+          4.537389,
+          4.537389,
+          4.537389
+        ],
+        [
+          5.235287,
+          5.235287,
+          5.235287
+        ],
+        [
+          5.933185,
+          5.933185,
+          5.933185
+        ]
+      ],
+      "converged_neither": [
+        [
+          0.35,
+          0.35,
+          1.047898
+        ],
+        [
+          0.35,
+          0.35,
+          1.745796
+        ],
+        [
+          0.35,
+          0.35,
+          2.443694
+        ],
+        [
+          0.35,
+          0.35,
+          3.141593
+        ],
+        [
+          0.35,
+          0.35,
+          3.839491
+        ],
+        [
+          0.35,
+          0.35,
+          4.537389
+        ],
+        [
+          0.35,
+          0.35,
+          5.235287
+        ],
+        [
+          0.35,
+          0.35,
+          5.933185
+        ],
+        [
+          0.35,
+          1.047898,
+          0.35
+        ],
+        [
+          0.35,
+          1.047898,
+          1.047898
+        ],
+        [
+          0.35,
+          1.047898,
+          1.745796
+        ],
+        [
+          0.35,
+          1.047898,
+          2.443694
+        ],
+        [
+          0.35,
+          1.047898,
+          3.141593
+        ],
+        [
+          0.35,
+          1.047898,
+          3.839491
+        ],
+        [
+          0.35,
+          1.047898,
+          4.537389
+        ],
+        [
+          0.35,
+          1.047898,
+          5.235287
+        ],
+        [
+          0.35,
+          1.047898,
+          5.933185
+        ],
+        [
+          0.35,
+          1.745796,
+          0.35
+        ],
+        [
+          0.35,
+          1.745796,
+          1.047898
+        ],
+        [
+          0.35,
+          1.745796,
+          1.745796
+        ]
+      ]
+    }
+  },
+  "geometric_breakdown": {
+    "points_with_active_coordinate_guard": 729,
+    "points_above_sum_guard": 274,
+    "points_below_or_on_sum_guard": 455,
+    "converged_t120_above_sum_guard": 4,
+    "converged_t120_below_or_on_sum_guard": 5,
+    "converged_t400_above_sum_guard": 4,
+    "converged_t400_below_or_on_sum_guard": 5,
+    "gained_by_more_time_above_sum_guard": 0,
+    "gained_by_more_time_below_or_on_sum_guard": 0
+  },
+  "degeneracy_check": {
+    "coordinate_guard_active_for_all_grid_points": true,
+    "vector_field_unique_values_example_center": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "expected_behavior": "Because every wrapped point satisfies u_i < 2*pi, all coordinates move with the fast speed. Relative torus offsets are preserved, so only already-near-synchronous initial conditions can satisfy the convergence test."
+  },
+  "timing": {
+    "mean_t_final_t120": 118.64197530864197,
+    "mean_t_final_t400": 395.18518518518516,
+    "max_t_final_t120": 120.0,
+    "max_t_final_t400": 400.0
+  }
+}

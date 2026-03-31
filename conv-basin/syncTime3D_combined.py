@@ -2,7 +2,7 @@
 Combined 3D + convergence animation for the D=3 hybrid oscillator.
 Layout:
   Top-left:  3D view of trajectories in x-coords [-pi,pi)^3
-  Top-right: x_i(t) - mean(x(t)) over time — CONVERGENCE IS DIRECTLY VISIBLE
+  Top-right: x_i(t) - circular mean over time — CONVERGENCE IS DIRECTLY VISIBLE
              as all three lines approach 0
   Bottom-left:  x_1 vs x_2  (pairwise synchronization)
   Bottom-right: x_1 vs x_3  (pairwise synchronization)
@@ -16,6 +16,8 @@ import matplotlib.gridspec as gridspec
 from matplotlib.animation import FuncAnimation
 from scipy.interpolate import interp1d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+from hybrid_tools import torus_spread_x
 
 # ── Model ─────────────────────────────────────────────────────────
 DELTA       = 0.5
@@ -44,7 +46,7 @@ INITIALS_X = [
 ]
 INITIALS_U  = [(x + PI) / (2*PI) for x in INITIALS_X]
 COLORS      = ['#1f77b4', '#d62728', '#2ca02c', '#9467bd']
-LABELS      = [f'P{i+1}  $\\|v\\|={np.abs(x-x.mean()).max():.3f}$'
+LABELS      = [f'P{i+1}  $\\|v\\|_T={torus_spread_x(x):.3f}$'
                for i, x in enumerate(INITIALS_X)]
 
 
@@ -139,7 +141,7 @@ for u0, x0 in zip(INITIALS_U, INITIALS_X):
     t, y, _ = ode(u0, t0=0.0, t1=T_END, dt=0.001, tTol=1e-6, pars=pars, withDy=True)
     raw_trajs.append(y)
     raw_times.append(t)
-    v_norm = np.abs(x0 - x0.mean()).max()
+    v_norm = torus_spread_x(x0)
     print(f"  {np.round(u0,3)}  ||v||={v_norm:.4f}  pts={len(t)}")
 
 # ── Interpolate ───────────────────────────────────────────────────
@@ -161,7 +163,7 @@ interp_x = [2.0 * PI * U - PI for U in interp_u]
 unwrap_x  = [2.0 * PI * U - PI for U in unwrap_u]
 cumlen    = [cumlen_torus(W) for W in interp_u]
 
-# Transverse component: v_i(t) = x_i(t) - mean(x(t))  (circular)
+# Transverse component: v_i(t) = x_i(t) - circular mean  (torus-correct)
 # Use circular mean in u coords * 2pi for proper wrapping
 def circ_mean_u(u_row):
     theta = 2*PI*u_row

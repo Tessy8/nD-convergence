@@ -10,6 +10,8 @@ from matplotlib.animation import FuncAnimation
 from scipy.interpolate import interp1d
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+from hybrid_tools import torus_spread_x
+
 # ── Model ─────────────────────────────────────────────────────────
 DELTA       = 0.5
 D           = 3
@@ -124,8 +126,9 @@ for u0 in INITIALS:
                   pars=pars, withDy=True)
     raw_trajs.append(y)
     raw_times.append(t)
+    x_final = 2.0 * PI * np.mod(y[-1], 1.0) - PI
     print(f"  {np.round(u0,3)}  pts={len(t)}  "
-          f"spread={np.abs(y[-1]-y[-1].mean()).max():.4f}")
+          f"torus_spread={torus_spread_x(x_final):.4f}")
 
 # ── Interpolate to uniform time grid ──────────────────────────────
 n_frames    = int(T_END * FPS)
