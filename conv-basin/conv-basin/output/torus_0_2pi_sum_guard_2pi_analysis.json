@@ -6,15 +6,13 @@
     ],
     "dimension": 3,
     "delta": 0.5,
-    "max_workers": 3,
     "coordinate_guard_u": 0.0,
     "coordinate_guard_equation": "u_i = 0",
     "baseline_sum_guard_u": 10.42477796076938,
     "baseline_sum_guard_equation": "u1 + u2 + u3 = 1 + 3*pi",
     "test_sum_guard_u": 6.283185307179586,
     "test_sum_guard_equation": "u1 + u2 + u3 = 2*pi",
-    "interpretation": "Both runs use the professor's coordinate guard u_i > 0 in the interior; only the sum threshold changes.",
-    "classification_acceleration": "When coord_guard_u = 0 on the interior grid, all coordinates share the same speed at each state, so torus spread is invariant and convergence can be decided geometrically without integration. If that shortcut is disabled by a future model change, the script falls back to multiprocessing across CPU cores."
+    "interpretation": "Both runs use the professor's coordinate guard u_i > 0 in the interior; only the sum threshold changes."
   },
   "grid": {
     "n_per_axis": 9,
@@ -718,9 +716,9 @@
     }
   },
   "timing": {
-    "baseline_mean_tfinal_t120": 118.64197530864197,
-    "baseline_mean_tfinal_t400": 395.18518518518516,
-    "sumguard2pi_mean_tfinal_t120": 118.64197530864197,
-    "sumguard2pi_mean_tfinal_t400": 395.18518518518516
+    "baseline_mean_tfinal_t120": 118.66772693778,
+    "baseline_mean_tfinal_t400": 395.2065833595098,
+    "sumguard2pi_mean_tfinal_t120": 118.6620661422626,
+    "sumguard2pi_mean_tfinal_t400": 395.20812881274213
   }
 }

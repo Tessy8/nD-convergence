@@ -1,20 +1,21 @@
 """
-Separate experiment for the professor's SUM-GUARD variant in u coordinates.
+Separate experiment for a sum-guard comparison in torus coordinates u.
 
-Coordinates:
-    u in [0, 2*pi)^3
+The torus state is stored as u in [0, 2*pi)^3, but the coordinate guard is
+evaluated in centered coordinates
+
+    x = wrap_to_pi(u - pi) in [-pi, pi)^3.
+
+This avoids the degenerate all-coordinates-together dynamics that appear when
+the coordinate guard is checked directly against u > 0 in the interior.
 
 Model:
-    u_k is slow when u_k > 0 for all k and sum(u) < c_sum
+    u_k is slow when x_k > 0 and sum(u) < c_sum
 
-Equivalently:
-    FAST if (u_i < coord_guard) OR (u1 + u2 + u3 > c_sum)
-    SLOW otherwise
-
-This script compares two choices with the professor's coordinate guard:
-    coord_guard = 0
-    c_sum = 1 + 3*pi   (baseline remapped sum threshold)
-    c_sum = 2*pi       (professor's requested sum threshold)
+This script compares:
+    x-guard = 0          (equivalently u-guard = pi after centering)
+    c_sum = 1 + 3*pi
+    c_sum = 2*pi
 
 Outputs:
   - console summary
@@ -39,7 +40,7 @@ LONG_TMAX          = 400.0
 
 GRID_N             = 9
 GRID_MARGIN        = 0.35
-COORD_GUARD_U      = 0.0
+COORD_GUARD_X      = 0.0
 SUM_GUARD_BASE_U   = 1.0 + 3.0 * PI
 SUM_GUARD_TEST_U   = TWO_PI
 
@@ -49,6 +50,10 @@ OUTPUT_JSON        = os.path.join(OUTPUT_DIR, "torus_0_2pi_sum_guard_2pi_analysi
 
 def wrap_theta(x):
     return np.mod(np.asarray(x, dtype=float), TWO_PI)
+
+
+def center_theta(x):
+    return ((np.asarray(x, dtype=float) + PI) % TWO_PI) - PI
 
 
 def circular_mean_theta(x):
@@ -66,24 +71,25 @@ def torus_spread_theta(x):
     return float(np.abs(torus_residual_theta(x)).max())
 
 
-def vfield_theta(u, coord_guard_u, sum_guard_u, delta):
-    """Hybrid vector field in u coordinates."""
+def vfield_theta(u, coord_guard_x, sum_guard_u, delta):
+    """Hybrid vector field with coordinate guard evaluated in centered x-coordinates."""
     u = wrap_theta(u)
-    return np.where((u < coord_guard_u) | (u.sum() > sum_guard_u), 1.0, 1.0 - delta)
+    x = center_theta(u - PI)
+    return np.where((x < coord_guard_x) | (u.sum() > sum_guard_u), 1.0, 1.0 - delta)
 
 
-def integrate_pc_theta(u0, coord_guard_u, sum_guard_u, delta, t_max, dt, t_tol,
+def integrate_pc_theta(u0, coord_guard_x, sum_guard_u, delta, t_max, dt, t_tol,
                        conv_tol=0.05, conv_time=10.0):
     u = wrap_theta(u0)
     h = dt
     t = 0.0
-    du0 = vfield_theta(u, coord_guard_u, sum_guard_u, delta)
+    du0 = vfield_theta(u, coord_guard_x, sum_guard_u, delta)
     conv_for = 0.0
     converged = False
 
     while t < t_max:
         u_trial = u + h * du0
-        du1 = vfield_theta(u_trial, coord_guard_u, sum_guard_u, delta)
+        du1 = vfield_theta(u_trial, coord_guard_x, sum_guard_u, delta)
 
         if not np.allclose(du1, du0) and h > t_tol:
             h /= 2.0
@@ -91,10 +97,10 @@ def integrate_pc_theta(u0, coord_guard_u, sum_guard_u, delta, t_max, dt, t_tol,
 
         u = wrap_theta(u + h * du0)
         t += h
-        du0 = vfield_theta(u, coord_guard_u, sum_guard_u, delta)
+        du0 = vfield_theta(u, coord_guard_x, sum_guard_u, delta)
         h = min(h * 1.5, dt)
 
-        if torus_spread_theta(u) < CONV_TOL:
+        if torus_spread_theta(u) < conv_tol:
             conv_for += h
             if conv_for >= conv_time:
                 converged = True
@@ -120,14 +126,14 @@ def classify_grid(points, sum_guard_u, t_max, label):
     t_final = np.zeros(len(points), dtype=float)
     print(
         f"Classifying {len(points)} points for {label} "
-        f"(coord guard={COORD_GUARD_U:.6f}, sum guard={sum_guard_u:.6f}, t={t_max:.0f})",
+        f"(x-guard={COORD_GUARD_X:.6f}, sum guard={sum_guard_u:.6f}, t={t_max:.0f})",
         flush=True,
     )
 
     for i, u0 in enumerate(points):
         res = integrate_pc_theta(
             u0,
-            coord_guard_u=COORD_GUARD_U,
+            coord_guard_x=COORD_GUARD_X,
             sum_guard_u=sum_guard_u,
             delta=DELTA,
             t_max=t_max,
@@ -190,23 +196,27 @@ def main():
     base_400, base_t400 = classify_grid(X, SUM_GUARD_BASE_U, LONG_TMAX, "baseline_sum_guard")
     test_400, test_t400 = classify_grid(X, SUM_GUARD_TEST_U, LONG_TMAX, "sum_guard_2pi")
 
-    inside_base_simplex = X.sum(axis=1) <= SUM_GUARD_BASE_U
-    inside_test_simplex = X.sum(axis=1) <= SUM_GUARD_TEST_U
+    centered = center_theta(X - PI)
+    positive_centered = np.all(centered > COORD_GUARD_X, axis=1)
+    inside_base_simplex = positive_centered & (X.sum(axis=1) <= SUM_GUARD_BASE_U)
+    inside_test_simplex = positive_centered & (X.sum(axis=1) <= SUM_GUARD_TEST_U)
 
     summary = {
         "model": {
             "torus_domain": [0.0, TWO_PI],
             "dimension": 3,
             "delta": DELTA,
-            "coordinate_guard_u": COORD_GUARD_U,
-            "coordinate_guard_equation": "u_i = 0",
+            "coordinate_guard_x": COORD_GUARD_X,
+            "coordinate_guard_u_equivalent": float(PI + COORD_GUARD_X),
+            "coordinate_guard_equation": "x_i = 0 with x = wrap_to_pi(u - pi)",
             "baseline_sum_guard_u": SUM_GUARD_BASE_U,
             "baseline_sum_guard_equation": "u1 + u2 + u3 = 1 + 3*pi",
             "test_sum_guard_u": SUM_GUARD_TEST_U,
             "test_sum_guard_equation": "u1 + u2 + u3 = 2*pi",
             "interpretation": (
-                "Both runs use the professor's coordinate guard u_i > 0 in the "
-                "interior; only the sum threshold changes."
+                "Both runs keep the coordinate guard in centered x-coordinates "
+                "so each component can switch fast/slow independently; only the "
+                "sum threshold changes."
             ),
         },
         "grid": {
@@ -220,7 +230,7 @@ def main():
             "points_inside_test_slow_simplex": int(inside_test_simplex.sum()),
             "fraction_inside_baseline_slow_simplex": float(inside_base_simplex.mean()),
             "fraction_inside_test_slow_simplex": float(inside_test_simplex.mean()),
-            "expected_test_volume_fraction_simplex": float(1.0 / 6.0),
+            "expected_test_volume_fraction_raw_sum_simplex": float(1.0 / 6.0),
         },
         "standard_horizon_comparison": summarize_pair(
             X, base_120, test_120, "baseline_t120", "sumguard2pi_t120"

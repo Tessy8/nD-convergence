@@ -1,20 +1,20 @@
 """
-Experiment in torus coordinates u in [0, 2*pi)^3 for the professor's model.
+Experiment in torus coordinates u in [0, 2*pi)^3 with a centered coordinate guard.
+
+The torus state is stored as u in [0, 2*pi)^3, but the coordinate guard is
+evaluated in the centered coordinates
+
+    x = wrap_to_pi(u - pi) in [-pi, pi)^3.
+
+This preserves coordinate-specific fast/slow asymmetry on the torus while
+allowing the sum guard to be expressed directly in u-coordinates.
 
 Model:
-    u_k is slow when u_k > 0 for all k and sum(u) < 2*pi
+    u_k is slow when x_k > 0 and sum(u) < 2*pi
 
-Equivalently, in the vector-field implementation:
-    FAST if (u_i < coord_guard) OR (sum(u) > sum_guard)
+Equivalently:
+    FAST in coordinate k if (x_k < 0) OR (sum(u) > 2*pi)
     SLOW otherwise
-
-with
-    coord_guard = 0
-    sum_guard = 2*pi
-
-Since the grid samples the interior of [0, 2*pi)^3, the coordinate guard is
-inactive on the sampled points, so the slow region is exactly the simplex
-{sum(u) < 2*pi}, whose volume fraction is 1/6 of the cube.
 
 Outputs:
   - console summary
@@ -39,7 +39,7 @@ LONG_TMAX     = 400.0
 
 GRID_N        = 9
 GRID_MARGIN   = 0.35
-COORD_GUARD_U = 0.0
+COORD_GUARD_X = 0.0
 SUM_GUARD_U   = TWO_PI
 
 OUTPUT_DIR    = "conv-basin/output"
@@ -49,6 +49,11 @@ OUTPUT_JSON   = os.path.join(OUTPUT_DIR, "torus_0_2pi_c2pi_analysis.json")
 def wrap_theta(x):
     """Wrap coordinates into [0, 2*pi)."""
     return np.mod(np.asarray(x, dtype=float), TWO_PI)
+
+
+def center_theta(x):
+    """Centered torus coordinates in [-pi, pi)."""
+    return ((np.asarray(x, dtype=float) + PI) % TWO_PI) - PI
 
 
 def circular_mean_theta(x):
@@ -69,26 +74,27 @@ def torus_spread_theta(x):
     return float(np.abs(torus_residual_theta(x)).max())
 
 
-def vfield_theta(u, coord_guard, sum_guard, delta):
-    """Hybrid vector field in u-coordinates."""
+def vfield_theta(u, coord_guard_x, sum_guard, delta):
+    """Hybrid vector field with coordinate guard evaluated in centered x-coordinates."""
     u = wrap_theta(u)
-    return np.where((u < coord_guard) | (u.sum() > sum_guard), 1.0, 1.0 - delta)
+    x = center_theta(u - PI)
+    return np.where((x < coord_guard_x) | (u.sum() > sum_guard), 1.0, 1.0 - delta)
 
 
-def integrate_pc_theta(x0, coord_guard, sum_guard, delta, t_max, dt, t_tol,
+def integrate_pc_theta(x0, coord_guard_x, sum_guard, delta, t_max, dt, t_tol,
                        conv_tol=0.05, conv_time=10.0):
     """Predictor-corrector integrator in [0, 2*pi)^3."""
     x = wrap_theta(x0)
     x_unwrapped = np.array(x0, dtype=float)
     h = dt
     t = 0.0
-    dx0 = vfield_theta(x, coord_guard, sum_guard, delta)
+    dx0 = vfield_theta(x, coord_guard_x, sum_guard, delta)
     conv_for = 0.0
     converged = False
 
     while t < t_max:
         x_trial = x + h * dx0
-        dx1 = vfield_theta(x_trial, coord_guard, sum_guard, delta)
+        dx1 = vfield_theta(x_trial, coord_guard_x, sum_guard, delta)
 
         if not np.allclose(dx1, dx0) and h > t_tol:
             h /= 2.0
@@ -97,7 +103,7 @@ def integrate_pc_theta(x0, coord_guard, sum_guard, delta, t_max, dt, t_tol,
         x_unwrapped = x_unwrapped + h * dx0
         x = wrap_theta(x + h * dx0)
         t += h
-        dx0 = vfield_theta(x, coord_guard, sum_guard, delta)
+        dx0 = vfield_theta(x, coord_guard_x, sum_guard, delta)
         h = min(h * 1.5, dt)
 
         if torus_spread_theta(x) < conv_tol:
@@ -130,7 +136,7 @@ def classify_grid(points, t_max, label):
     for i, x0 in enumerate(points):
         res = integrate_pc_theta(
             x0,
-            coord_guard=COORD_GUARD_U,
+            coord_guard_x=COORD_GUARD_X,
             sum_guard=SUM_GUARD_U,
             delta=DELTA,
             t_max=t_max,
@@ -189,7 +195,8 @@ def main():
     conv_400, tfin_400 = classify_grid(X, LONG_TMAX, "professor_model")
 
     gained = (~conv_120) & conv_400
-    inside_slow_simplex = X.sum(axis=1) <= SUM_GUARD_U
+    centered = center_theta(X - PI)
+    inside_slow_simplex = np.all(centered > COORD_GUARD_X, axis=1) & (X.sum(axis=1) <= SUM_GUARD_U)
 
     summary = {
         "model": {
@@ -200,13 +207,15 @@ def main():
             "t_tol": T_TOL,
             "conv_tol": CONV_TOL,
             "conv_time": CONV_TIME,
-            "coordinate_guard_u": COORD_GUARD_U,
+            "coordinate_guard_x": COORD_GUARD_X,
+            "coordinate_guard_u_equivalent": float(PI + COORD_GUARD_X),
             "sum_guard_u": SUM_GUARD_U,
-            "slow_region": "u_k > 0 for all k and u1 + u2 + u3 < 2*pi",
-            "fast_region": "u_k < 0 for some k or u1 + u2 + u3 > 2*pi",
+            "slow_region": "x_k > 0 for all k, with x = wrap_to_pi(u - pi), and u1 + u2 + u3 < 2*pi",
+            "fast_region": "x_k < 0 for some k, with x = wrap_to_pi(u - pi), or u1 + u2 + u3 > 2*pi",
             "interpretation": (
-                "On the sampled interior grid, the coordinate guard is inactive "
-                "and the slow region is exactly the simplex sum(u) < 2*pi."
+                "The torus state is stored in u, but the coordinate guard is "
+                "checked in centered coordinates x = wrap_to_pi(u - pi), so the "
+                "flow retains coordinate-specific asymmetry."
             ),
         },
         "grid": {
@@ -220,7 +229,7 @@ def main():
             "points_inside_slow_simplex": int(inside_slow_simplex.sum()),
             "points_outside_slow_simplex": int((~inside_slow_simplex).sum()),
             "fraction_inside_slow_simplex": float(inside_slow_simplex.mean()),
-            "expected_volume_fraction_simplex": float(1.0 / 6.0),
+            "expected_volume_fraction_raw_sum_simplex": float(1.0 / 6.0),
             "converged_t120_inside_slow_simplex": int((conv_120 & inside_slow_simplex).sum()),
             "converged_t120_outside_slow_simplex": int((conv_120 & (~inside_slow_simplex)).sum()),
             "converged_t400_inside_slow_simplex": int((conv_400 & inside_slow_simplex).sum()),
@@ -229,11 +238,11 @@ def main():
             "gained_by_more_time_outside_slow_simplex": int((gained & (~inside_slow_simplex)).sum()),
         },
         "vector_field_check": {
-            "value_at_center": vfield_theta(np.array([PI, PI, PI]), COORD_GUARD_U, SUM_GUARD_U, DELTA).tolist(),
-            "value_near_origin": vfield_theta(np.array([0.2, 0.2, 0.2]), COORD_GUARD_U, SUM_GUARD_U, DELTA).tolist(),
+            "value_at_center": vfield_theta(np.array([PI, PI, PI]), COORD_GUARD_X, SUM_GUARD_U, DELTA).tolist(),
+            "value_near_origin": vfield_theta(np.array([0.2, 0.2, 0.2]), COORD_GUARD_X, SUM_GUARD_U, DELTA).tolist(),
             "expected_behavior": (
-                "Points with sum(u) < 2*pi move with the slow speed until they "
-                "cross the sum guard; points with sum(u) > 2*pi are fast."
+                "Coordinates on the x_k < 0 side of the centered torus are fast; "
+                "coordinates with x_k > 0 can be slow when the sum guard is also satisfied."
             ),
         },
         "timing": {
