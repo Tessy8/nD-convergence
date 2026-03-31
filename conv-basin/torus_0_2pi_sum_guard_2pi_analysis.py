@@ -1,25 +1,24 @@
 """
-Separate experiment for a sum-guard comparison in torus coordinates u.
+Remapped original model written in torus coordinates u in [0, 2*pi)^3.
 
-The torus state is stored as u in [0, 2*pi)^3, but the coordinate guard is
-evaluated in centered coordinates
+This is not the professor's literal simplex-in-the-cube model. Instead, it is
+the original x-model rewritten in terms of the torus variable
 
     x = wrap_to_pi(u - pi) in [-pi, pi)^3.
 
-This avoids the degenerate all-coordinates-together dynamics that appear when
-the coordinate guard is checked directly against u > 0 in the interior.
+Coordinate guards are therefore checked in centered x-coordinates, while the
+sum guard is expressed in u-coordinates for comparison experiments.
 
 Model:
-    u_k is slow when x_k > 0 and sum(u) < c_sum
+    coordinate k is slow when x_k > 0 and sum(u) < c_sum
 
 This script compares:
-    x-guard = 0          (equivalently u-guard = pi after centering)
-    c_sum = 1 + 3*pi
-    c_sum = 2*pi
+    c_sum = 1 + 3*pi   (the remapped original baseline)
+    c_sum = 2*pi       (a modified remapped sum threshold)
 
 Outputs:
   - console summary
-  - conv-basin/output/torus_0_2pi_sum_guard_2pi_analysis.json
+  - conv-basin/output/torus_0_2pi_remapped_sum_guard_comparison.json
 """
 
 import json
@@ -45,7 +44,7 @@ SUM_GUARD_BASE_U   = 1.0 + 3.0 * PI
 SUM_GUARD_TEST_U   = TWO_PI
 
 OUTPUT_DIR         = "conv-basin/output"
-OUTPUT_JSON        = os.path.join(OUTPUT_DIR, "torus_0_2pi_sum_guard_2pi_analysis.json")
+OUTPUT_JSON        = os.path.join(OUTPUT_DIR, "torus_0_2pi_remapped_sum_guard_comparison.json")
 
 
 def wrap_theta(x):
@@ -203,6 +202,7 @@ def main():
 
     summary = {
         "model": {
+            "model_name": "remapped_original_model_in_u_coordinates",
             "torus_domain": [0.0, TWO_PI],
             "dimension": 3,
             "delta": DELTA,
@@ -214,9 +214,9 @@ def main():
             "test_sum_guard_u": SUM_GUARD_TEST_U,
             "test_sum_guard_equation": "u1 + u2 + u3 = 2*pi",
             "interpretation": (
-                "Both runs keep the coordinate guard in centered x-coordinates "
-                "so each component can switch fast/slow independently; only the "
-                "sum threshold changes."
+                "This keeps the original coordinate asymmetry by evaluating the "
+                "coordinate guard in centered x-coordinates, then compares two "
+                "different sum thresholds written in u-coordinates."
             ),
         },
         "grid": {
@@ -231,6 +231,11 @@ def main():
             "fraction_inside_baseline_slow_simplex": float(inside_base_simplex.mean()),
             "fraction_inside_test_slow_simplex": float(inside_test_simplex.mean()),
             "expected_test_volume_fraction_raw_sum_simplex": float(1.0 / 6.0),
+            "note": (
+                "These counts are for the remapped model's actual slow region, "
+                "which also requires x_k > 0 in centered coordinates. They are "
+                "not the same as the raw simplex volume in the literal professor model."
+            ),
         },
         "standard_horizon_comparison": summarize_pair(
             X, base_120, test_120, "baseline_t120", "sumguard2pi_t120"
