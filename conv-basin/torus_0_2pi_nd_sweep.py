@@ -120,8 +120,24 @@ def build_structured_grid(D, grid_n, margin):
     return np.stack([g.ravel() for g in grids], axis=1)
 
 def build_random_grid(D, n, seed=42):
+    """
+    Stratified sample from [0, 2*pi)^D.
+
+    For large D, a purely uniform draw almost never produces points with
+    sum(x) < 2*pi (expected sum is D*pi >> 2*pi), so the slow-simplex
+    mechanism never engages and nothing converges.  Instead we use:
+      50% uniform over the full torus  — tests the wrap-around mechanism
+      50% each coordinate in [0, 3 * 2*pi/D]  — puts points near/inside
+          the slow simplex where the mechanism actually operates
+    Both halves are wrapped into [0, 2*pi).
+    """
     rng = np.random.default_rng(seed)
-    return rng.uniform(0.0, TWO_PI, size=(n, D))
+    n_full    = n // 2
+    n_cluster = n - n_full
+    X_full    = rng.uniform(0.0, TWO_PI, size=(n_full, D))
+    coord_max = min(TWO_PI, 3.0 * TWO_PI / D)
+    X_cluster = rng.uniform(0.0, coord_max, size=(n_cluster, D))
+    return np.mod(np.concatenate([X_full, X_cluster], axis=0), TWO_PI)
 
 
 # ── main ───────────────────────────────────────────────────────────────────

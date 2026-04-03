@@ -1,0 +1,254 @@
+{
+  "model": {
+    "dimension": 8,
+    "torus_domain": [
+      0.0,
+      6.283185307179586
+    ],
+    "delta": 0.5,
+    "sum_guard": 6.283185307179586,
+    "rule": "dx_k slow iff x_k > c AND sum(x) < 2*pi",
+    "feasibility_boundary_c": 0.7853981633974483,
+    "conjectured_optimal_c": 0.39269908169872414,
+    "grid_description": "random uniform, n=5000"
+  },
+  "grid": {
+    "total_points": 5000,
+    "description": "random uniform, n=5000"
+  },
+  "coarse_sweep": [
+    {
+      "c": 0.0,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.039269908169872414,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.07853981633974483,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.11780972450961724,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.15707963267948966,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.19634954084936207,
+      "n_converged_t120": 0,
+      "pct_converged_t120": 0.0,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.23561944901923448,
+      "n_converged_t120": 4,
+      "pct_converged_t120": 0.08,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.2748893571891069,
+      "n_converged_t120": 4,
+      "pct_converged_t120": 0.08,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3141592653589793,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3534291735288517,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.39269908169872414,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.43196898986859655,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.47123889803846897,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.5105088062083414,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.5497787143782138,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.5890486225480862,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.6283185307179586,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.667588438887831,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.7068583470577035,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.7461282552275759,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    }
+  ],
+  "fine_sweep": [
+    {
+      "c": 0.2768528525976005,
+      "n_converged_t120": 4,
+      "pct_converged_t120": 0.08,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.2821823401349403,
+      "n_converged_t120": 4,
+      "pct_converged_t120": 0.08,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.2875118276722802,
+      "n_converged_t120": 4,
+      "pct_converged_t120": 0.08,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.29284131520962,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.29817080274695984,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.30350029028429965,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.30882977782163945,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3141592653589793,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3194887528963191,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.324818240433659,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3301477279709988,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.33547721550833864,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.34080670304567845,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.34613619058301826,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    },
+    {
+      "c": 0.3514656781203581,
+      "n_converged_t120": 5,
+      "pct_converged_t120": 0.1,
+      "slow_simplex_fraction": 0.0
+    }
+  ],
+  "optimal": {
+    "c": 0.29284131520962,
+    "n_converged_t120": 5,
+    "pct_converged_t120": 0.1,
+    "n_converged_t400": 8,
+    "pct_converged_t400": 0.16
+  },
+  "comparison_with_c0": {
+    "c0_t120": 0,
+    "c0_t400": 0,
+    "c0_pct_t120": 0.0,
+    "c0_pct_t400": 0.0,
+    "optimal_t120": 5,
+    "optimal_t400": 8
+  },
+  "conjecture": {
+    "predicted_c_opt": 0.39269908169872414,
+    "observed_c_opt": 0.29284131520962,
+    "relative_error": 0.25428571428571434,
+    "supported": false
+  }
+}
