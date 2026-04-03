@@ -96,22 +96,20 @@ def integrate(x0, c, delta, t_max, dt, t_tol, conv_tol, conv_time):
     return False
 
 
-# ── worker for multiprocessing (module-level so it is picklable) ───────────
-_WORKER_PARAMS = {}
+# ── worker for multiprocessing ─────────────────────────────────────────────
+# Parameters are passed as a tuple alongside x0 — works correctly on Windows
+# (spawn) and Linux/Mac (fork) because nothing relies on shared global state.
 
-def _worker(x0):
-    p = _WORKER_PARAMS
-    return integrate(x0, p["c"], p["delta"], p["t_max"],
-                     p["dt"], p["t_tol"], p["conv_tol"], p["conv_time"])
+def _worker(args):
+    x0, c, delta, t_max, dt, t_tol, conv_tol, conv_time = args
+    return integrate(x0, c, delta, t_max, dt, t_tol, conv_tol, conv_time)
 
 def classify_parallel(X, c, t_max, n_workers, label=""):
-    global _WORKER_PARAMS
-    _WORKER_PARAMS = dict(c=c, delta=DELTA, t_max=t_max, dt=DT,
-                          t_tol=T_TOL, conv_tol=CONV_TOL, conv_time=CONV_TIME)
     print(f"  c={c:.5f}  n={len(X)}  workers={n_workers}  [{label}]",
           flush=True)
+    tasks = [(x0, c, DELTA, t_max, DT, T_TOL, CONV_TOL, CONV_TIME) for x0 in X]
     with Pool(n_workers) as pool:
-        results = pool.map(_worker, list(X), chunksize=max(1, len(X)//(n_workers*4)))
+        results = pool.map(_worker, tasks, chunksize=max(1, len(X)//(n_workers*4)))
     return np.array(results, dtype=bool)
 
 
