@@ -9,3 +9,8 @@ test4D.py
 integro_sde/
 plotmisc/
 Saltation-Tutorials/
+
+butterfly/**
+Nelder-Mead/
+shell-sort/
+autonomous/
