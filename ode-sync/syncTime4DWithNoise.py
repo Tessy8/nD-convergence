@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from scipy.interpolate import interp1d
+from integro_sde.sde import SDE
+from statsmodels.graphics.gofplots import qqplot_2samples
 
 lower_boundary = 0.3
 upper_boundary = 0.7
@@ -13,13 +15,6 @@ FAST        = 1.00
 SLOW        = 0.30
 BAND_CENTER = 0.50
 BAND_HALF   = 0.15
-
-DIM = 7
-AXIS_LABELS = ['a','b','c','d','e','f','g']   # 7 names
-AXIS_COLORS = {lab: c for lab, c in zip(
-    AXIS_LABELS,
-    ['#1f77b4','#d62728','#2ca02c','#9467bd','#ff7f0e','#8c564b','#17becf']
-)}
 
 
 class OdePC:
@@ -129,10 +124,11 @@ def rhs_one(coords, speed=0.5, K_phase=2.0, gamma=0.12):
 
     s0, s1 = 0.02, 0.15
     g = np.clip((spread - s0) / (s1 - s0), 0.0, 1.0)
-    base = np.ones(DIM)
-    for i in range(DIM):
-        if (zones[i] == 0) and any(zones[j] == 1 for j in range(DIM) if j != i):
-            base[i] = 1.0 + 0.5 * g
+    base = np.ones(4)
+    if not all(z == 1 for z in zones):
+        for i in range(4):
+            if (zones[i] == 0) and any(zones[j] == 1 for j in range(4) if j != i):
+                base[i] = 1.0 + 0.5 * g
 
     dphase = np.abs(wrap_signed(center - BAND_CENTER))
     gain = SLOW if dphase <= BAND_HALF else FAST
@@ -153,34 +149,87 @@ def rhs_all(t, Y, pars):
     centers = np.zeros(n)
 
     for i in range(n):
-        v_i, phi_i = rhs_one(Y[DIM*i:DIM*(i+1)], speed=speed, K_phase=K_phase, gamma=gamma)
-        dY[DIM*i:DIM*(i+1)] = v_i
+        v_i, phi_i = rhs_one(Y[4*i:4*(i+1)], speed=speed, K_phase=K_phase, gamma=gamma)
+        dY[4*i:4*(i+1)] = v_i
         centers[i] = phi_i
 
     phi_bar = circular_mean(centers)
     for i in range(n):
         phase_err = wrap_signed(phi_bar - centers[i])
-        dY[DIM*i:DIM*(i+1)] += k_couple * phase_err
+        dY[4*i:4*(i+1)] += k_couple * phase_err
     return dY
 
-def create_continuous_trajectories():
-    """Integrate rhs_all for 4 agents; returns agent trajectories"""
+def build_p_from_segment(T, Y, n_agents, t_start, t_end, torus=True):
+    """Make a DxN matrix p from a time window [t_start,t_end]."""
+    i0 = np.searchsorted(T, t_start, side='left')
+    i1 = np.searchsorted(T, t_end,   side='right')
+    seg = Y[i0:i1]                               # (S, 4*n_agents)
+    S = seg.shape[0]
+    X = seg.reshape(S, n_agents, 4)              # (S, A, D=4)
+    if torus:
+        X = np.mod(X, 1.0)                       # keep on [0,1)
+
+    # p has shape (D, N) with columns = 4D points
+    p = X.transpose(2, 0, 1).reshape(4, -1)      # (4, S*A)
+    return p
+
+def distance_from_diagonal(p):
+    """
+    Circular version of distance-from-diagonal:
+    for each 4D point (a column of p in [0,1)),
+    compute circular mean on the circle and the std of
+    minimal circular differences to that mean.
+    Returns one value per column.
+    """
+    # p: (D, N) in [0,1)
+    p = np.mod(p, 1.0)
+    theta = 2 * np.pi * p           # (D, N)
+    c = np.cos(theta).mean(axis=0)  # (N,)
+    s = np.sin(theta).mean(axis=0)  # (N,)
+    ang = np.arctan2(s, c)          # mean direction, shape (N,)
+    center = ang / (2 * np.pi)      # back to [0,1) “phase”
+
+    # minimal circular differences in [-0.5, 0.5)
+    diffs = wrap_signed(p - center[None, :])
+    return diffs.std(axis=0)
+
+def gaussian_reference(D, M):
+    """Reference from i.i.d. N(0,1): same metric as data."""
+    return np.random.randn(D, M).std(axis=0)
+
+def plot_cdf(x, label):
+    xs = np.sort(x)
+    qs = np.linspace(0, 1, xs.size, endpoint=True)
+    plt.plot(qs, xs, label=label, linewidth=2)
+
+def create_continuous_trajectories(noise_strength=0.0):
+    """Integrate rhs_all for 4 agents using SDE; noise_strength=0 reproduces ODE"""
     initials = [
-        np.array([0.00, 0.25, 0.10, 0.05, 0.05, 0.28, 0.19]),
-        np.array([0.18, 0.05, 0.30, 0.08, 0.16, 0.15, 0.22]),
-        np.array([0.27, 0.12, 0.02, 0.32, 0.01, 0.07, 0.08]),
-        np.array([0.06, 0.20, 0.18, 0.12, 0.28, 0.12, 0.10]),
+        np.array([0.00, 0.25, 0.10, 0.05]),
+        np.array([0.18, 0.05, 0.30, 0.08]),
+        np.array([0.27, 0.12, 0.02, 0.32]),
+        np.array([0.06, 0.20, 0.18, 0.12]),
     ]
     n = len(initials)
-    Y0 = np.concatenate(initials)
+    Y0 = np.concatenate(initials).astype(np.float64, copy=False)
+    pars = dict(n_agents=n, speed=0.5, K_phase=0.3, gamma=0.12, k_couple=0.05)
 
-    ode = OdePC(rhs_all)
-    pars = dict(n_agents=n, speed=0.5, K_phase=0.3, gamma=0, k_couple=0.05)
-    t, Y, _ = ode(Y0, t0=0.0, t1=40.0, dt=0.01, tTol=1e-3, pars=pars, withDy=True)
+    def d(x):
+        return rhs_all(0.0, x, pars).astype(np.float64, copy=False)
 
-    trajs = [Y[:, DIM*i:DIM*(i+1)] for i in range(n)]
-    times = [t for _ in range(n)]
-    return trajs, times
+    def s(x, dw):
+        return (noise_strength * dw).astype(np.float64, copy=False)
+
+    sde = SDE(d, s, sdim=len(Y0))
+
+    # integrate
+    t = np.arange(0.0, 500, 0.01, dtype=np.float64)
+    T, Y, W = sde.integrateAt(t, Y0, dtype=np.float64)
+    print("T_end =", T[-1], "  Var(W[:,0]) =", np.var(W[:,0]))
+
+    trajs = [Y[:, 4*i:4*(i+1)] for i in range(n)]
+    times = [T for _ in range(n)]
+    return trajs, times, T, Y, n
 
 def build_biased_P(D, ix, iy, small=0.03, big=1.0, col_norm=0.9):
     """
@@ -201,9 +250,13 @@ def build_biased_P(D, ix, iy, small=0.03, big=1.0, col_norm=0.9):
     P = P / norms * col_norm
     return P
 
-def make_projection_set(num=6, n=DIM, base_seed=None):
-    # choose 6 informative pairs in 7D
-    pairs = [(0,1), (2,3), (4,5), (0,6), (1,4), (2,5)]
+def make_projection_set(num=6, n=4, base_seed=None):
+    """
+    Biased projections: each view highlights a different pair of dims.
+    For 4D, this cycles through (w,x), (y,z), (w,y), (x,z), (w,z), (x,y).
+    """
+    # choose pairs to emphasize (wrap/cycle if num > len(pairs))
+    pairs = [(0,1),(2,3),(0,2),(1,3),(0,3),(1,2)]
     Ps = []
     for v in range(num):
         ix, iy = pairs[v % len(pairs)]
@@ -274,23 +327,80 @@ def project_and_clip_line(P, L4):
     q1 = np.array([x0 + u1*dx, y0 + u1*dy])
     return np.vstack([q0, q1])
 
-def build_intersection_lines_nd(boundaries=(0.3, 0.7), n_points=60, dim=DIM):
+def build_intersection_lines_4d(boundaries=(0.3, 0.7), n_points=60):
+    """Returns 4D polylines made by fixing 3 coords to boundaries, varying the 4th"""
     lo, hi = boundaries
+    dims = [0, 1, 2, 3]
     v = np.linspace(0.0, 1.0, n_points)
-    lines = []
-    # mimic the 4D behavior: fix 3 coordinates to {lo,hi}, vary one
-    for free_dim in range(dim):
-        for fixed_val in (lo, hi):
-            Q = np.full((n_points, dim), fixed_val)
-            Q[:, free_dim] = v
-            lines.append(Q)
-    return lines
+
+    lines_4d = []
+    for free_dim in dims:
+        Q = np.zeros((n_points, 4))
+        Q[:, free_dim] = v
+        for d in dims:
+            if d != free_dim:
+                Q[:, d] = lo
+        lines_4d.append(Q)
+
+        Q = np.zeros((n_points, 4))
+        Q[:, free_dim] = v
+        for d in dims:
+            if d != free_dim:
+                Q[:, d] = hi
+        lines_4d.append(Q)
+
+    return lines_4d
 
 def animate_continuous_agents():
     """Run simulation projected to 6 views, and animate"""
-    PROJECTIONS_2x4 = make_projection_set(num=6, n=DIM, base_seed=17)
-    trajs, times = create_continuous_trajectories()
-    n_agents = len(trajs)
+    PROJECTIONS_2x4 = make_projection_set(num=6, n=4, base_seed=17)
+    trajs, times, T, Y, n_agents = create_continuous_trajectories(noise_strength=0)
+
+    # Gaussian check (early and late)
+    Tend = T[-1]
+    p_early = build_p_from_segment(T, Y, n_agents, t_start=T[0],      t_end=Tend*0.05)
+    p_late  = build_p_from_segment(T, Y, n_agents, t_start=Tend*0.9, t_end=Tend)
+
+    data_early = distance_from_diagonal(p_early)
+    data_late  = distance_from_diagonal(p_late)
+
+    ref_early = gaussian_reference(4, M=data_early.size)
+    ref_late  = gaussian_reference(4, M=data_late.size)
+
+    plt.figure(figsize=(10, 4))
+
+    # QQ plot: simulation vs Gaussian reference (early)
+    plt.subplot(1, 2, 1)
+    qqplot_2samples(data_early, ref_early, ax=plt.gca())
+    plt.gca().lines[-1].set_label("early")
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    lo = min(xmin, ymin)
+    hi = max(xmax, ymax)
+    plt.plot([lo, hi], [lo, hi], 'k--', linewidth=1, label="y=x")
+    plt.xlim(lo, hi)
+    plt.ylim(lo, hi)
+    plt.title("QQ: early vs Gaussian ref")
+    plt.grid(alpha=0.3)
+    plt.legend()
+
+    # QQ plot: simulation vs Gaussian reference (late)
+    plt.subplot(1, 2, 2)
+    qqplot_2samples(data_late, ref_late, ax=plt.gca())
+    plt.gca().lines[-1].set_label("late")
+    xmin, xmax = plt.xlim()
+    ymin, ymax = plt.ylim()
+    lo = min(xmin, ymin)
+    hi = max(xmax, ymax)
+    plt.plot([lo, hi], [lo, hi], 'k--', linewidth=1, label="y=x")
+    plt.xlim(lo, hi)
+    plt.ylim(lo, hi)
+    plt.title("QQ: late vs Gaussian ref")
+    plt.grid(alpha=0.3)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig("qq_compare_early_late.png", dpi=160)
 
     total_time = max(times[i][-1] for i in range(n_agents))
     fps = 30
@@ -302,7 +412,7 @@ def animate_continuous_agents():
         raw_traj, raw_times = trajs[i], times[i]
         interp_funcs = [interp1d(raw_times, raw_traj[:, d], kind='linear',
                                  bounds_error=False, fill_value='extrapolate')
-                        for d in range(7)]
+                        for d in range(4)]
         interpolated_trajs.append(np.column_stack([f(uniform_times) for f in interp_funcs]))
 
     unwrapped_trajs = []
@@ -336,23 +446,23 @@ def animate_continuous_agents():
     fig, axs = plt.subplots(rows, cols, figsize=(18, 12))
     fig.tight_layout()
 
-    pairs = [(0,1), (2,3), (4,5), (0,6), (1,4), (2,5)]
+    pairs = [(0,1),(2,3),(0,2),(1,3),(0,3),(1,2)]
     for idx, (ax, P) in enumerate(zip(axs.flat, PROJECTIONS_2x4), start=1):
         ax.set_aspect('equal'); ax.grid(True, alpha=0.3)
         ax.set_xlim(0, 1);      ax.set_ylim(0, 1)
         draw_axes_for_P(ax, P, length=0.2)
         i, j = pairs[(idx-1) % len(pairs)]
-        ax.set_title(f"Projection {idx}: {AXIS_LABELS[i]}-{AXIS_LABELS[j]}")
+        ax.set_title(f"Projection {idx}: {AXIS_LABELS[i]}–{AXIS_LABELS[j]}")
 
 
-    lines_nd = build_intersection_lines_nd(boundaries=(lower_boundary, upper_boundary),
-                                       n_points=8, dim=DIM)
+    lines_4d = build_intersection_lines_4d(boundaries=(lower_boundary, upper_boundary), n_points=8)
 
     for s, (ax, P) in enumerate(zip(axs.flat, PROJECTIONS_2x4)):
-        for L in lines_nd:
-            seg = project_and_clip_line(P, L)
+        for L4 in lines_4d:
+            seg = project_and_clip_line(P, L4)
             if seg is not None:
                 ax.plot(seg[:,0], seg[:,1], color="purple", linewidth=0.8, alpha=0.28, zorder=1)
+
 
     colors = ['#1f77b4', '#d62728', '#2ca02c', '#9467bd']
     trails = [[ax.plot([], [], '-', color=colors[k], alpha=0.7, linewidth=2,
@@ -396,7 +506,7 @@ def animate_continuous_agents():
 
     anim = FuncAnimation(fig, update, frames=len(uniform_times),
                          init_func=init, interval=1000/fps, blit=True, repeat=True)
-    anim.save("agents_animation_7Dc.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
+    anim.save("agents_animation_4D_with_ltl_noise_and gaussian_plot.mp4", writer="ffmpeg", fps=fps, bitrate=2000)
     return anim
 
 

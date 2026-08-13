@@ -2,6 +2,7 @@
 *.txt
 *.mp4
 *.png
+*.json
 
 # Files
 esync_fixed.py
@@ -14,3 +15,7 @@ butterfly/**
 Nelder-Mead/
 shell-sort/
 autonomous/
+
+**/__pycache__/
+
+.venv/
